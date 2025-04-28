@@ -1,0 +1,28 @@
+# Core dependencies
+pandas==2.2.3
+openpyxl==3.1.5
+numpy==2.2.4
+pillow==11.1.0
+psutil==7.0.0
+
+# OCR and PDF processing
+easyocr==1.7.2
+PyMuPDF==1.25.5
+pdf2image==1.17.0
+torch==2.6.0+cu118
+torchaudio==2.6.0+cu118
+torchvision==0.21.0
+
+# Google Cloud dependencies
+google-cloud-documentai==3.3.0
+google-genai==1.9.0
+google-oauth2-tool==0.0.3
+
+# Time zone support
+tzdata==2025.1
+
+# Logging and utilities
+python-json-logger==3.3.0
+rich==14.0.0
+alive-progress==3.2.0
+python-dotenv==1.1.0
