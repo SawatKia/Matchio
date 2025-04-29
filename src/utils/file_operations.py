@@ -110,13 +110,16 @@ class FileManager:
             # Format datetime columns to yy-mm-dd
             for column in df.select_dtypes(include=['datetime']):
                 logger.debug(f"Formatting datetime column: {column} to this strftime format: '%y-%m-%d'")
-                df[column] = df[column].dt.strftime('%y-%m-%d')
+                df[column] = df[column].apply(lambda x: x.strftime('%y-%m-%d %H:%M') if pd.notna(x) and x.time() != pd.Timestamp('00:00').time() else x.strftime('%y-%m-%d'))
 
             # Format float columns to 2 decimal places
             for column in df.select_dtypes(include=['float64']):
                 df[column] = df[column].apply(lambda x: f'{x:.2f}' if pd.notna(x) else '')
 
-            df.to_csv(file_path, index=False)
+            if Path(file_path).suffix == '.csv':
+                df.to_csv(file_path, index=False, encoding='utf-8-sig')
+            elif Path(file_path).suffix == '.xlsx':
+                df.to_excel(file_path, index=False, float_format="%.2f", encoding='utf-8-sig', engine='xlsxwriter')
             logger.info(f"Saved DataFrame to {file_path}")
         except PermissionError as e:
             logger.error(f"Permission denied when saving DataFrame to {file_path}. Error: {e}")
