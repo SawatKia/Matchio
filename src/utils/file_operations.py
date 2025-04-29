@@ -97,20 +97,25 @@ class FileManager:
     @staticmethod
     def save_dataframe(df: pd.DataFrame, file_path: str) -> None:
         """
-        Save DataFrame to CSV, formatting datetime columns to %d-%m-%y
-        
+        Save DataFrame to CSV, formatting datetime columns to yy-mm-dd
+        and numeric columns to 2 decimal places.
+
         Args:
             df: DataFrame to save
             file_path: Path to save CSV
         """
         try:
             FileManager.ensure_directory_exists(file_path)
-            
-            # Format datetime columns
+
+            # Format datetime columns to yy-mm-dd
             for column in df.select_dtypes(include=['datetime']):
-                logger.debug(f"Formatting datetime column: {column} to this strftime format: '%d-%m-%y %H:%M'")
-                df[column] = df[column].dt.strftime('%d-%m-%y %H:%M')
-            
+                logger.debug(f"Formatting datetime column: {column} to this strftime format: '%y-%m-%d'")
+                df[column] = df[column].dt.strftime('%y-%m-%d')
+
+            # Format float columns to 2 decimal places
+            for column in df.select_dtypes(include=['float64']):
+                df[column] = df[column].apply(lambda x: f'{x:.2f}' if pd.notna(x) else '')
+
             df.to_csv(file_path, index=False)
             logger.info(f"Saved DataFrame to {file_path}")
         except PermissionError as e:
