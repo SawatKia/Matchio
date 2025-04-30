@@ -1,6 +1,7 @@
 # src\utils\file_operations.py
 import pandas as pd
 import os
+import io
 import re
 from io import StringIO
 from pathlib import Path
@@ -107,20 +108,44 @@ class FileManager:
         try:
             FileManager.ensure_directory_exists(file_path)
 
-            # Format datetime columns to yy-mm-dd
-            for column in df.select_dtypes(include=['datetime']):
-                logger.debug(f"Formatting datetime column: {column} to this strftime format: '%y-%m-%d'")
-                df[column] = df[column].apply(lambda x: x.strftime('%y-%m-%d %H:%M') if pd.notna(x) and x.time() != pd.Timestamp('00:00').time() else x.strftime('%y-%m-%d'))
+            buffer = io.StringIO()
+            df.info(buf=buffer)
+            info_str = buffer.getvalue()
+            logger.debug(f"Dataframe info:\n{info_str}")
 
-            # Format float columns to 2 decimal places
-            for column in df.select_dtypes(include=['float64']):
+            df = df.copy()  # Work on a copy to avoid modifying original
+        
+            # Store original column types
+            original_types = df.dtypes.to_dict()
+            
+            # Format datetime columns
+            for column in df.select_dtypes(include=['datetime']):
+                logger.info(f"Formatting datetime column: {column}")
+                df[column] = df[column].apply(lambda x: x.strftime('%y-%m-%d %H:%M') 
+                    if pd.notna(x) and x.time() != pd.Timestamp('00:00').time() 
+                    else x.strftime('%y-%m-%d'))
+
+            # Format float columns
+            for column in df.select_dtypes(include=['float']):
+                logger.info(f"Formatting float column: {column}")
                 df[column] = df[column].apply(lambda x: f'{x:.2f}' if pd.notna(x) else '')
+
+            # Format only original object columns
+            for column, dtype in original_types.items():
+                if dtype == 'object':
+                    logger.info(f"Formatting object column: {column}")
+                    df[column] = (df[column].astype(str)
+                                .str.replace(r'\s+', ' ', regex=True)
+                                .str.strip()
+                                .apply(lambda x: f"'{x}" if pd.notna(x) and len(str(x)) > 0 else x))
 
             if Path(file_path).suffix == '.csv':
                 df.to_csv(file_path, index=False, encoding='utf-8-sig')
             elif Path(file_path).suffix == '.xlsx':
-                df.to_excel(file_path, index=False, float_format="%.2f", encoding='utf-8-sig', engine='xlsxwriter')
+                df.to_excel(file_path, index=False, encoding='utf-8-sig', engine='xlsxwriter')
+                
             logger.info(f"Saved DataFrame to {file_path}")
+            logger.debug(f"{'='*50}")
         except PermissionError as e:
             logger.error(f"Permission denied when saving DataFrame to {file_path}. Error: {e}")
             raise
