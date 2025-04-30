@@ -1,3 +1,4 @@
+# src\gui\widgets\progress_tracker.py
 import tkinter as tk
 from tkinter import ttk
 from typing import Optional

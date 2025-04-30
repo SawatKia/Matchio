@@ -1,3 +1,4 @@
+# src\gui\widgets\directory_input.py
 import tkinter as tk
 from tkinter import ttk, filedialog
 from typing import Callable, Optional

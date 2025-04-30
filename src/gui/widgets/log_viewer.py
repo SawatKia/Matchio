@@ -1,3 +1,4 @@
+# src\gui\widgets\log_viewer.py
 import tkinter as tk
 from tkinter import ttk
 import time

@@ -1,3 +1,4 @@
+# src\gui\widgets\language_toggle.py
 import tkinter as tk
 from tkinter import ttk
 from typing import Callable, Optional
