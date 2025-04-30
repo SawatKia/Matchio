@@ -6,6 +6,7 @@ from typing import Dict, List, Tuple, Set, Optional
 import logging
 from pathlib import Path
 import os
+import time
 import itertools # Import for combinations
 
 from utils import get_logger, FileManager
@@ -65,6 +66,11 @@ class TransactionMatcher:
         # Results for matched transactions
         self.matched_deposits: List[Dict] = []
         self.matched_withdrawals: List[Dict] = []
+
+        # Add attributes to store counts for summary logging
+        self.total_statement_entries = 0
+        self.matched_statement_entries = 0
+        self.unmatched_statement_entries = 0
 
         # Keep original index to ensure reports maintain original order if needed before sorting
         self.statement_df['original_index'] = self.statement_df.index
@@ -130,6 +136,20 @@ class TransactionMatcher:
                              # logger.debug(f"Converted {col} in {df_name}_df to numeric")
                          except Exception as e:
                              logger.error(f"Error converting {col} in {df_name}_df to numeric: {e}")
+
+        # Ensure object columns are treated as strings
+        # This helps preserve leading zeros in IDs and other text fields
+        for df_name, df in [('statement', self.statement_df), ('sale', self.sale_df),
+                           ('purchase', self.purchase_df), ('withholding', self.withholding_df)]:
+            if df is not None and not df.empty:
+                for col in df.columns:
+                    # Check if the column dtype is 'object'
+                    if df[col].dtype == 'object':
+                        try:
+                            df[col] = df[col].astype(str)
+                            # logger.debug(f"Converted '{col}' in {df_name}_df to string")
+                        except Exception as e:
+                            logger.error(f"Error converting '{col}' in {df_name}_df to string: {e}")
 
         # Add matched status columns if they don't exist
         if 'matched' not in self.sale_df.columns:
@@ -363,7 +383,7 @@ class TransactionMatcher:
                 'match_type': 'None' # 'Sale', 'Withholding', 'Sale+Withholding', 'Combination Sale'
             }
 
-            logger.debug(f"Attempting to match deposit: Date={deposit_date.strftime('%y-%m-%d')}, Amount={deposit_amount:.2f}")
+            logger.debug(f"Attempting to match deposit: statement_idx={statement_idx}, Date={deposit_date.strftime('%y-%m-%d')}, Amount={deposit_amount:.2f}")
 
             # --- Strategy: Prioritize matches ---
             # 1. Look for single exact/tolerance match in Sales
@@ -541,7 +561,7 @@ class TransactionMatcher:
             'match_type': 'None'
         }
 
-        logger.debug(f"Attempting to match withdrawal: Date={withdrawal_date.strftime('%y-%m-%d')}, Amount={withdrawal_amount:.2f}")
+        logger.debug(f"Attempting to match withdrawal: statement_idx={statement_idx}, Date={withdrawal_date.strftime('%y-%m-%d')}, Amount={withdrawal_amount:.2f}")
 
         candidate_purchases = self._find_candidate_purchases(withdrawal_date, withdrawal_amount)
 
@@ -597,31 +617,59 @@ class TransactionMatcher:
 
         # Iterate through statement entries
         # We process in order of statement date, which was sorted in _prepare_data
-        for idx in self.statement_df.index:
+        for idx in self.statement_df.index: # zero-indexed
             try:
                 row = self.statement_df.loc[idx]
                 if row['isDeposit']:
                     match_result = self._match_deposit(idx)
-                    # Only append matched deposits to the results list
+                    # Append all deposits to the results list, mark if matched
+                    self.matched_deposits.append(match_result)
                     if match_result['is_matched']:
-                        self.matched_deposits.append(match_result)
+                         self.matched_statement_entries += 1
                 else: # isWithdrawal
                     match_result = self._match_withdrawal(idx)
-                     # Only append matched withdrawals to the results list
+                     # Append all withdrawals to the results list, mark if matched
+                    self.matched_withdrawals.append(match_result)
                     if match_result['is_matched']:
-                        self.matched_withdrawals.append(match_result)
+                         self.matched_statement_entries += 1
             except Exception as e:
                 logger.error(f"Error processing statement entry at index {idx}: {e}")
                 # Decide if to continue or stop on error. Continuing for robustness.
 
+        self.total_statement_entries = len(self.statement_df)
+        self.unmatched_statement_entries = self.total_statement_entries - self.matched_statement_entries
 
         logger.info(f"Transaction matching completed.")
+
         logger.info(f"Summary:")
-        logger.info(f" - Matched deposits: {len(self.matched_deposits)}")
-        logger.info(f" - Matched withdrawals: {len(self.matched_withdrawals)}")
-        logger.info(f" - Matched sale invoices: {len(self.matched_sale_indexes)}")
-        logger.info(f" - Matched purchase invoices: {len(self.matched_purchase_indexes)}")
-        logger.info(f" - Matched withholding entries: {len(self.matched_withholding_indexes)}")
+        logger.info(f" - Total statement entries: {self.total_statement_entries}")
+        matched_pct = (self.matched_statement_entries/self.total_statement_entries * 100) if self.total_statement_entries > 0 else 0.0
+        unmatched_pct = (self.unmatched_statement_entries/self.total_statement_entries * 100) if self.total_statement_entries > 0 else 0.0
+        logger.info(f" - Matched statement entries: {self.matched_statement_entries} ({matched_pct:.1f}%)")
+        logger.info(f" - Unmatched statement entries: {self.unmatched_statement_entries} ({unmatched_pct:.1f}%)")
+        
+        # Log matched counts and percentages
+        sale_matched = len(self.matched_sale_indexes)
+        sale_total = len(self.sale_df) if not self.sale_df.empty else 0
+        sale_unmatched = sale_total - sale_matched
+        sale_matched_pct = (sale_matched/sale_total * 100) if sale_total > 0 else 0
+        sale_unmatched_pct = (sale_unmatched/sale_total * 100) if sale_total > 0 else 0
+        
+        purchase_matched = len(self.matched_purchase_indexes)
+        purchase_total = len(self.purchase_df) if not self.purchase_df.empty else 0
+        purchase_unmatched = purchase_total - purchase_matched
+        purchase_matched_pct = (purchase_matched/purchase_total * 100) if purchase_total > 0 else 0
+        purchase_unmatched_pct = (purchase_unmatched/purchase_total * 100) if purchase_total > 0 else 0
+        
+        withholding_matched = len(self.matched_withholding_indexes)
+        withholding_total = len(self.withholding_df) if not self.withholding_df.empty else 0
+        withholding_unmatched = withholding_total - withholding_matched
+        withholding_matched_pct = (withholding_matched/withholding_total * 100) if withholding_total > 0 else 0
+        withholding_unmatched_pct = (withholding_unmatched/withholding_total * 100) if withholding_total > 0 else 0
+
+        logger.info(f" - Sale invoices: {sale_matched}/{sale_total} matched ({sale_matched_pct:.1f}%), {sale_unmatched} unmatched ({sale_unmatched_pct:.1f}%)")
+        logger.info(f" - Purchase invoices: {purchase_matched}/{purchase_total} matched ({purchase_matched_pct:.1f}%), {purchase_unmatched} unmatched ({purchase_unmatched_pct:.1f}%)")
+        logger.info(f" - Withholding entries: {withholding_matched}/{withholding_total} matched ({withholding_matched_pct:.1f}%), {withholding_unmatched} unmatched ({withholding_unmatched_pct:.1f}%)")
 
 
     def _get_thai_col_name(self, report_type: str, english_name: str) -> str:
@@ -636,99 +684,97 @@ class TransactionMatcher:
             DataFrame containing transaction match information.
             Includes both matched deposits and withdrawals, sorted by statement date.
         """
+        start_time = time.time()
         logger.info("Generating transaction match report...")
 
         match_rows = []
 
         # Combine matched deposits and withdrawals for sorting
-        all_matched_transactions = sorted(
-            self.matched_deposits + self.matched_withdrawals,
-            key=lambda x: x.get('deposit_date') or x.get('withdrawal_date') # Sort by date
-        )
+        # Iterate through all statement entries in their original order
+        # Sort by original_index to maintain original file order before final date sort
+        statement_sorted_by_original_index = self.statement_df.sort_values(by='original_index').reset_index(drop=True)
 
-        for match in all_matched_transactions:
-            is_deposit = 'deposit_date' in match # Determine if it's a deposit or withdrawal
+        for statement_idx, statement_row in statement_sorted_by_original_index.iterrows():
+            original_statement_index = statement_row.get('original_index', statement_idx)
+            is_deposit = statement_row['isDeposit']
+            txn_date = statement_row['datetime']
+            txn_amount = float(statement_row['amount'])
 
-            statement_idx = match['statement_idx']
-            statement_row = self.statement_df.loc[statement_idx] # Get original statement row for context
-            original_statement_index = statement_row.get('original_index', statement_idx) # Preserve original index
-
+            # Find the corresponding match info if it exists
+            match_info = None
             if is_deposit:
-                txn_type = 'เงินฝาก'
-                txn_date = match['deposit_date']
-                txn_amount = match['deposit_amount']
-                matched_sales_indices = match.get('matched_sales_indices', [])
-                matched_withholdings_indices = match.get('matched_withholdings_indices', [])
-                matched_purchases_indices = [] # Not applicable for deposits
-            else:
-                txn_type = 'เงินถอน'
-                txn_date = match['withdrawal_date']
-                txn_amount = match['withdrawal_amount']
-                matched_sales_indices = [] # Not applicable for withdrawals
-                matched_withholdings_indices = [] # Not applicable for withdrawals
-                matched_purchases_indices = match.get('matched_purchases_indices', [])
+                # Search in matched_deposits
+                for match in self.matched_deposits:
+                    # Use original_index for lookup as statement_df might be re-indexed after sorting
+                    if self.statement_df.loc[match['statement_idx']].get('original_index', match['statement_idx']) == original_statement_index:
+                         match_info = match
+                         break
+            else: # isWithdrawal
+                # Search in matched_withdrawals
+                for match in self.matched_withdrawals:
+                    # Use original_index for lookup
+                    if self.statement_df.loc[match['statement_idx']].get('original_index', match['statement_idx']) == original_statement_index:
+                         match_info = match
+                         break
+
+            # Populate report row
+            row_data = {
+                self._get_thai_col_name('transaction_match_report', 'original_statement_index'): original_statement_index,
+                self._get_thai_col_name('transaction_match_report', 'transaction_type'): 'เงินฝาก' if is_deposit else 'เงินถอน',
+                self._get_thai_col_name('transaction_match_report', 'transaction_date'): txn_date,
+                self._get_thai_col_name('transaction_match_report', 'withdrawal_amount'): txn_amount if not is_deposit else 0.0,
+                self._get_thai_col_name('transaction_match_report', 'deposit_amount'): txn_amount if is_deposit else 0.0,
+                self._get_thai_col_name('transaction_match_report', 'matched_companies'): "",
+                self._get_thai_col_name('transaction_match_report', 'sale_tax_ids'): "",
+                self._get_thai_col_name('transaction_match_report', 'sale_invoice_numbers'): "",
+                self._get_thai_col_name('transaction_match_report', 'purchase_tax_ids'): "",
+                self._get_thai_col_name('transaction_match_report', 'purchase_invoice_numbers'): "",
+                self._get_thai_col_name('transaction_match_report', 'withholding_paid_dates'): "",
+                self._get_thai_col_name('transaction_match_report', 'total_matched_amount'): 0.0,
+                self._get_thai_col_name('transaction_match_report', 'difference'): txn_amount, # Initialize difference with full amount
+                self._get_thai_col_name('transaction_match_report', 'match_type'): "Unmatched",
+            }
+
+            if match_info:
+                row_data[self._get_thai_col_name('transaction_match_report', 'matched_companies')] = " , ".join(sorted(list(match_info.get('companies', set()))))
+                row_data[self._get_thai_col_name('transaction_match_report', 'total_matched_amount')] = match_info['total_matched_amount']
+                row_data[self._get_thai_col_name('transaction_match_report', 'difference')] = match_info['difference']
+                row_data[self._get_thai_col_name('transaction_match_report', 'match_type')] = match_info['match_type']
+
+                if is_deposit:
+                    # Populate sale and withholding details for deposits
+                    sale_invoice_tax_numbers = []
+                    sale_tax_ids = []
+                    for sale_idx in match_info.get('matched_sales_indices', []):
+                         if sale_idx in self.sale_df.index:
+                            sale_row = self.sale_df.loc[sale_idx]
+                            sale_invoice_tax_numbers.append(str(sale_row.get('sale_invoice_tax_number', 'N/A')))
+                            sale_tax_ids.append(str(sale_row.get('company_tax_id', 'N/A')))
+                    row_data[self._get_thai_col_name('transaction_match_report', 'sale_tax_ids')] = " , ".join(sale_tax_ids)
+                    row_data[self._get_thai_col_name('transaction_match_report', 'sale_invoice_numbers')] = " , ".join(sale_invoice_tax_numbers)
+
+                    withholding_paid_dates = []
+                    for with_idx in match_info.get('matched_withholdings_indices', []):
+                         if with_idx in self.withholding_df.index:
+                             with_row = self.withholding_df.loc[with_idx]
+                             paid_date = with_row.get('paid_date')
+                             withholding_paid_dates.append(paid_date.strftime('%y-%m-%d') if pd.notna(paid_date) else "")
+                    row_data[self._get_thai_col_name('transaction_match_report', 'withholding_paid_dates')] = " , ".join(withholding_paid_dates)
+
+                else: # isWithdrawal
+                    # Populate purchase details for withdrawals
+                    purchase_invoice_ids = []
+                    purchase_tax_ids = []
+                    for purchase_idx in match_info.get('matched_purchases_indices', []):
+                         if purchase_idx in self.purchase_df.index:
+                            purchase_row = self.purchase_df.loc[purchase_idx]
+                            purchase_invoice_ids.append(str(purchase_row.get('purchase_invoice_id', 'N/A')))
+                            purchase_tax_ids.append(str(purchase_row.get('company_tax_id', 'N/A')))
+                    row_data[self._get_thai_col_name('transaction_match_report', 'purchase_tax_ids')] = " , ".join(purchase_tax_ids)
+                    row_data[self._get_thai_col_name('transaction_match_report', 'purchase_invoice_numbers')] = " , ".join(purchase_invoice_ids)
 
 
-            companies = " , ".join(sorted(list(match.get('companies', set())))) # Sort companies for consistency
-
-            # Get details from matched sales
-            sale_invoice_tax_numbers = []
-            sale_tax_ids = []
-            for sale_idx in matched_sales_indices:
-                 # Ensure index exists in sale_df before accessing
-                 if sale_idx in self.sale_df.index:
-                    sale_row = self.sale_df.loc[sale_idx]
-                    sale_invoice_tax_numbers.append(str(sale_row.get('sale_invoice_tax_number', 'N/A')))
-                    sale_tax_ids.append(str(sale_row.get('company_tax_id', 'N/A')))
-                 else:
-                     logger.warning(f"Matched sale index {sale_idx} not found in sale_df during report generation.")
-                     continue
-
-
-            # Get details from matched purchases
-            purchase_invoice_ids = []
-            purchase_tax_ids = []
-            for purchase_idx in matched_purchases_indices:
-                 # Ensure index exists in purchase_df before accessing
-                 if purchase_idx in self.purchase_df.index:
-                    purchase_row = self.purchase_df.loc[purchase_idx]
-                    purchase_invoice_ids.append(str(purchase_row.get('purchase_invoice_id', 'N/A')))
-                    purchase_tax_ids.append(str(purchase_row.get('company_tax_id', 'N/A')))
-                 else:
-                    logger.warning(f"Matched purchase index {purchase_idx} not found in purchase_df during report generation.")
-                    continue
-
-
-            # Get details from matched withholdings
-            withholding_paid_dates = []
-            withholding_companies = []
-            for with_idx in matched_withholdings_indices:
-                 # Ensure index exists in withholding_df before accessing
-                 if with_idx in self.withholding_df.index:
-                     with_row = self.withholding_df.loc[with_idx]
-                     paid_date = with_row.get('paid_date')
-                     withholding_paid_dates.append(paid_date.strftime('%y-%m-%d') if pd.notna(paid_date) else "")
-                     withholding_companies.append(str(with_row.get('company_name', 'N/A')))
-                 else:
-                     logger.warning(f"Matched withholding index {with_idx} not found in withholding_df during report generation.")
-                     continue
-
-
-            match_rows.append({
-                self._get_thai_col_name('transaction_match_report', 'original_statement_index'): original_statement_index, # Include original index for reference
-                self._get_thai_col_name('transaction_match_report', 'transaction_type'): txn_type,
-                self._get_thai_col_name('transaction_match_report', 'transaction_date'): txn_date, # This will be formatted by save_dataframe
-                self._get_thai_col_name('transaction_match_report', 'transaction_amount'): txn_amount,
-                self._get_thai_col_name('transaction_match_report', 'matched_companies'): companies,
-                self._get_thai_col_name('transaction_match_report', 'sale_tax_ids'): " , ".join(sale_tax_ids),
-                self._get_thai_col_name('transaction_match_report', 'sale_invoice_numbers'): " , ".join(sale_invoice_tax_numbers),
-                self._get_thai_col_name('transaction_match_report', 'purchase_tax_ids'): " , ".join(purchase_tax_ids),
-                self._get_thai_col_name('transaction_match_report', 'purchase_invoice_numbers'): " , ".join(purchase_invoice_ids),
-                self._get_thai_col_name('transaction_match_report', 'withholding_paid_dates'): " , ".join(withholding_paid_dates),
-                self._get_thai_col_name('transaction_match_report', 'total_matched_amount'): match['total_matched_amount'],
-                self._get_thai_col_name('transaction_match_report', 'difference'): match['difference'],
-                self._get_thai_col_name('transaction_match_report', 'match_type'): match['match_type'], # Include match type for analysis
-            })
+            match_rows.append(row_data)
 
         if not match_rows:
             logger.warning("No matches found for transaction report")
@@ -737,7 +783,8 @@ class TransactionMatcher:
                 self._get_thai_col_name('transaction_match_report', 'original_statement_index'),
                 self._get_thai_col_name('transaction_match_report', 'transaction_type'),
                 self._get_thai_col_name('transaction_match_report', 'transaction_date'),
-                self._get_thai_col_name('transaction_match_report', 'transaction_amount'),
+                self._get_thai_col_name('transaction_match_report', 'withdrawal_amount'),
+                self._get_thai_col_name('transaction_match_report', 'deposit_amount'),
                 self._get_thai_col_name('transaction_match_report', 'matched_companies'),
                 self._get_thai_col_name('transaction_match_report', 'sale_tax_ids'),
                 self._get_thai_col_name('transaction_match_report', 'sale_invoice_numbers'),
@@ -763,12 +810,12 @@ class TransactionMatcher:
                  logger.error(f"Error converting {date_col_thai} column to datetime: {e}")
                  # Return empty DF with expected columns
                  return pd.DataFrame(columns=thai_cols)
-             # Sort by date (original statement date order is implicitly handled by sorting matched_transactions list)
-             # Sorting the final DF again ensures correct chronological order in the report
+             # Sort by date
              match_df = match_df.sort_values(by=date_col_thai).reset_index(drop=True)
              # Dates will be formatted to 'yy-mm-dd' by save_dataframe
 
-        logger.info(f"Generated transaction match report with {len(match_df)} rows.")
+        elapsed_time = time.time() - start_time
+        logger.info(f"Transaction match report generated in {elapsed_time:.2f} seconds.")
         return match_df
 
     def generate_sale_match_report(self) -> pd.DataFrame:
@@ -779,6 +826,7 @@ class TransactionMatcher:
             DataFrame containing sale invoice match information (matched/unmatched),
             sorted by invoice date.
         """
+        start_time = time.time()
         logger.info("Generating sale match status report...")
 
         if self.sale_df.empty:
@@ -837,7 +885,7 @@ class TransactionMatcher:
         if 'days_outstanding' in sale_report.columns:
             report_data[days_outstanding_col] = sale_report['days_outstanding']
         else:
-             logger.warning(f"Sale report: English column 'days_outstanding' not found in processed sale_df.")
+             logger.warning("Sale report: English column 'days_outstanding' not found in processed sale_df.")
              report_data[days_outstanding_col] = None
 
 
@@ -864,20 +912,20 @@ class TransactionMatcher:
         ]
         for col in numeric_cols_thai:
              if col in final_report.columns:
-                 try:
-                     final_report[col] = pd.to_numeric(final_report[col], errors='coerce')
-                 except Exception as e:
-                     logger.error(f"Error converting {col} column to numeric: {e}")
-                     # Return empty DF with expected columns
-                     return pd.DataFrame(columns=thai_cols)
+                  try:
+                      final_report[col] = pd.to_numeric(final_report[col], errors='coerce')
+                  except Exception as e:
+                      logger.error(f"Error converting {col} column to numeric: {e}")
+                      # Return empty DF with expected columns
+                      return pd.DataFrame(columns=thai_cols)
 
 
         # Sort by date
         if date_col_thai in final_report.columns:
             final_report = final_report.sort_values(by=date_col_thai).reset_index(drop=True)
 
-
-        logger.info(f"Generated sale match status report with {len(final_report)} rows.")
+        elapsed_time = time.time() - start_time
+        logger.info(f"Sale match status report generated in {elapsed_time:.2f} seconds.")
         return final_report
 
     def generate_purchase_match_report(self) -> pd.DataFrame:
@@ -888,6 +936,7 @@ class TransactionMatcher:
             DataFrame containing purchase invoice match information (matched/unmatched),
             sorted by invoice date.
         """
+        start_time = time.time()
         logger.info("Generating purchase match status report...")
 
         if self.purchase_df.empty:
@@ -955,12 +1004,12 @@ class TransactionMatcher:
         ]
         for col in numeric_cols_thai:
              if col in final_report.columns:
-                 try:
-                     final_report[col] = pd.to_numeric(final_report[col], errors='coerce')
-                 except Exception as e:
-                     logger.error(f"Error converting {col} column to numeric: {e}")
-                     # Return empty DF with expected columns
-                     return pd.DataFrame(columns=thai_cols)
+                  try:
+                      final_report[col] = pd.to_numeric(final_report[col], errors='coerce')
+                  except Exception as e:
+                      logger.error(f"Error converting {col} column to numeric: {e}")
+                      # Return empty DF with expected columns
+                      return pd.DataFrame(columns=thai_cols)
 
 
         # Sort by date
@@ -972,8 +1021,8 @@ class TransactionMatcher:
                 # Return empty DF with expected columns
                 return pd.DataFrame(columns=thai_cols)
 
-
-        logger.info(f"Generated purchase match status report with {len(final_report)} rows.")
+        elapsed_time = time.time() - start_time
+        logger.info(f"Purchase match status report generated in {elapsed_time:.2f} seconds.")
         return final_report
 
     def generate_withholding_match_report(self) -> pd.DataFrame:
@@ -984,6 +1033,7 @@ class TransactionMatcher:
             DataFrame containing withholding tax match information (matched/unmatched),
             sorted by paid date.
         """
+        start_time = time.time()
         logger.info("Generating withholding match status report...")
 
         if self.withholding_df.empty:
@@ -1030,7 +1080,7 @@ class TransactionMatcher:
         if 'days_since_payment' in withholding_report.columns:
             report_data[days_col_thai] = withholding_report['days_since_payment']
         else:
-             logger.warning(f"Withholding report: English column 'days_since_payment' not found in processed withholding_df.")
+             logger.warning("Withholding report: English column 'days_since_payment' not found in processed withholding_df.")
              report_data[days_col_thai] = None
 
 
@@ -1057,12 +1107,12 @@ class TransactionMatcher:
         ]
         for col in numeric_cols_thai:
              if col in final_report.columns:
-                 try:
-                     final_report[col] = pd.to_numeric(final_report[col], errors='coerce')
-                 except Exception as e:
-                     logger.error(f"Error converting {col} column to numeric: {e}")
-                     # Return empty DF with expected columns
-                     return pd.DataFrame(columns=thai_cols)
+                  try:
+                      final_report[col] = pd.to_numeric(final_report[col], errors='coerce')
+                  except Exception as e:
+                      logger.error(f"Error converting {col} column to numeric: {e}")
+                      # Return empty DF with expected columns
+                      return pd.DataFrame(columns=thai_cols)
 
 
         # Sort by date
@@ -1074,8 +1124,8 @@ class TransactionMatcher:
                 # Return empty DF with expected columns
                 return pd.DataFrame(columns=thai_cols)
 
-
-        logger.info(f"Generated withholding match status report with {len(final_report)} rows.")
+        elapsed_time = time.time() - start_time
+        logger.info(f"Withholding match status report generated in {elapsed_time:.2f} seconds.")
         return final_report
 
 
@@ -1084,7 +1134,8 @@ TransactionMatcher.TRANSACTION_REPORT_COLS_MAP = {
     'original_statement_index': 'ลำดับเดิม Statement', # Added for reference
     'transaction_type': 'ประเภทรายการ',
     'transaction_date': 'วันที่ทำรายการ',
-    'transaction_amount': 'จำนวนเงิน Statement',
+    'withdrawal_amount': 'จำนวนเงินถอน', # Updated column
+    'deposit_amount': 'จำนวนเงินฝาก', # Updated column
     'matched_companies': 'บริษัทที่จับคู่',
     'sale_tax_ids': 'เลขประจำตัวผู้เสียภาษี (ขาย)',
     'sale_invoice_numbers': 'เลขที่ใบกำกับภาษี (ขาย)',
@@ -1098,3 +1149,4 @@ TransactionMatcher.TRANSACTION_REPORT_COLS_MAP = {
 
 # Add transaction_match_report mapping to EXPECTED_COLUMN_MAPPINGS conceptually
 # This is just a conceptual mapping used within TransactionMatcher, not required in main.py CONFIG
+
