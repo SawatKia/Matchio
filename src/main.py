@@ -433,6 +433,7 @@ def main():
         end_time = time.time() - start_time
         logger.info(f"Total application execution time: \033[1;36m{end_time:.2f}\033[0m seconds")
 
+        #FIXME - finish GUI implementation
         # Launch GUI if needed
         # app = ApplicationGUI()
         # app.mainloop()
