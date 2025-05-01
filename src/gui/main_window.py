@@ -3,6 +3,7 @@ import threading
 import time
 import os
 import webbrowser
+import traceback
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from tkinter import ttk, filedialog, messagebox, font
@@ -11,6 +12,101 @@ from utils import get_logger, FileManager, CONFIG
 from .constants import MatchingConstants
 
 logger = get_logger()
+
+class TranslationManager:
+    """Handles language translations for the UI"""
+    TRANSLATIONS = {
+        "en": {
+            "window_title": "Transaction Matcher",
+            "files_tab": "Files",
+            "settings_tab": "Settings",
+            "process_tab": "Process",
+            "input_files": "Input Files",
+            "language": "Language:",
+            "thai": "Thai",
+            "english": "English",
+            "purchase_tax": "Purchase Tax Report (.csv):",
+            "sales_tax": "Sales Tax Report (.csv):",
+            "withholding_tax": "Withholding Tax Report (.xlsx):",
+            "bank_statement": "Bank Statement (.xlsx):",
+            "output_dir": "Output Directory:",
+            "browse": "Browse",
+            "open": "Open",
+            "sheet": "Sheet:",
+            "font_size": "Font Size",
+            "matching_params": "Matching Parameters",
+            "credit_days": "Credit Days:",
+            "sale_tolerance": "Sale Tolerance:",
+            "purchase_tolerance": "Purchase Tolerance:",
+            "reset": "Reset",
+            "start_processing": "Start Processing",
+            "open_output": "Open Output Directory",
+            "exit": "Exit",
+            "status": "Status",
+            "elapsed": "Elapsed:",
+            "eta": "ETA:",
+            "items": "Items:",
+            "ready": "Ready",
+            "processing": "Processing...",
+            "complete": "Complete",
+            "missing_files": "Please select the following files:",
+            "error": "Error",
+            "developer_error": "Developer Error Details",
+            "success": "Success",
+            "processing_complete": "Processing complete! Reports saved to: {}"
+        },
+        "th": {
+            "window_title": "โปรแกรมจับคู่ธุรกรรม",
+            "files_tab": "ไฟล์",
+            "settings_tab": "ตั้งค่า",
+            "process_tab": "ประมวลผล",
+            "input_files": "ไฟล์นำเข้า",
+            "language": "ภาษา:",
+            "thai": "ไทย",
+            "english": "English",
+            "purchase_tax": "รายงานภาษีซื้อ (.csv):",
+            "sales_tax": "รายงานภาษีขาย (.csv):",
+            "withholding_tax": "รายงานภาษีหัก ณ ที่จ่าย (.xlsx):",
+            "bank_statement": "รายการเดินบัญชี (.xlsx):",
+            "output_dir": "โฟลเดอร์ผลลัพธ์:",
+            "browse": "เลือก",
+            "open": "เปิด",
+            "sheet": "ชีต:",
+            "font_size": "ขนาดตัวอักษร",
+            "matching_params": "เงื่อนไขการจับคู่",
+            "credit_days": "ระยะเวลาเครดิต:",
+            "sale_tolerance": "ความคลาดเคลื่อนการขาย:",
+            "purchase_tolerance": "ความคลาดเคลื่อนการซื้อ:",
+            "reset": "รีเซ็ต",
+            "start_processing": "เริ่มการจับคู่",
+            "open_output": "เปิดโฟลเดอร์ผลลัพธ์",
+            "exit": "ออก",
+            "status": "สถานะ",
+            "elapsed": "เวลาที่ใช้:",
+            "eta": "เวลาที่คาดว่าเหลือ:",
+            "items": "จำนวน:",
+            "ready": "พร้อมใช้งาน",
+            "processing": "กำลังประมวลผล...",
+            "complete": "เสร็จสิ้น",
+            "missing_files": "กรุณาเลือกไฟล์ต่อไปนี้:",
+            "error": "ข้อผิดพลาด",
+            "developer_error": "รายละเอียดข้อผิดพลาดสำหรับนักพัฒนา",
+            "success": "สำเร็จ",
+            "processing_complete": "ประมวลผลเสร็จสิ้น! บันทึกผลลัพธ์ที่: {}"
+        }
+    }
+
+    @classmethod
+    def get_translation(cls, language: str, key: str, *format_args) -> str:
+        """Get translation for a key in the specified language"""
+        try:
+            translation = cls.TRANSLATIONS[language][key]
+            if format_args:
+                return translation.format(*format_args)
+            return translation
+        except KeyError:
+            logger.warning(f"Missing translation for key: {key}")
+            return key
 
 # Then modify the ApplicationGUI class
 class ApplicationGUI(tk.Tk):
@@ -560,7 +656,6 @@ class ApplicationGUI(tk.Tk):
         """Show error message with appropriate detail level"""
         if is_developer:
             # For developer: detailed error with stack trace
-            import traceback
             error_text = f"Error: {message}\n\n"
             error_text += traceback.format_exc()
             
