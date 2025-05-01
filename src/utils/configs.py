@@ -81,3 +81,25 @@ EXPECTED_COLUMN_MAPPINGS = {
          'ประเภทการจับคู่': 'ประเภทการจับคู่' # Column indicating how the match was made (Sale, Withholding, Combination)
     }
 }
+
+THEME_COLORS = {
+    "Dark+ (default dark)": {"bg": "#1E1E1E", "fg": "#D4D4D4", "select_bg": "#264F78", "button": "#333333"},
+    "Light+ (default light)": {"bg": "#FFFFFF", "fg": "#000000", "select_bg": "#ADD6FF", "button": "#E0E0E0"},
+    "Monokai": {"bg": "#272822", "fg": "#F8F8F2", "select_bg": "#49483E", "button": "#3E3D32"},
+    "Solarized Dark": {"bg": "#002B36", "fg": "#839496", "select_bg": "#073642", "button": "#586E75"},
+    "Solarized Light": {"bg": "#FDF6E3", "fg": "#657B83", "select_bg": "#EEE8D5", "button": "#93A1A1"},
+    "Dracula Official": {"bg": "#282A36", "fg": "#F8F8F2", "select_bg": "#44475A", "button": "#6272A4"},
+    "Material Theme": {"bg": "#263238", "fg": "#EEFFFF", "select_bg": "#314549", "button": "#546E7A"},
+    "Nord": {"bg": "#2E3440", "fg": "#D8DEE9", "select_bg": "#3B4252", "button": "#434C5E"},
+    "One Dark Pro": {"bg": "#282C34", "fg": "#ABB2BF", "select_bg": "#3E4451", "button": "#565C64"},
+    "Night Owl": {"bg": "#011627", "fg": "#D6DEEB", "select_bg": "#1D3B53", "button": "#7E57C2"},
+    "Shades of Purple": {"bg": "#1E1E3F","fg": "#C7C7C7","select_bg": "#B362FF","button": "#5A00A1"},
+    "Atom One Dark": {"bg": "#282C34","fg": "#ABB2BF","select_bg": "#3E4451","button": "#61AFEF"},
+    "Cobalt2": {"bg": "#193549","fg": "#FFFFFF","select_bg": "#003B4F","button": "#FF9D00"},
+    "Material Palenight": {"bg": "#292D3E","fg": "#A6ACCD","select_bg": "#3E4451","button": "#82AAFF"},
+    "Rosé Pine": {"bg": "#191724","fg": "#E0DEF4","select_bg": "#403D52","button": "#EBBCBA"},
+    "Tokyo Night": {"bg": "#1A1B26","fg": "#C0CAF5","select_bg": "#33467C","button": "#7AA2F7"},
+    "Winter is Coming": {"bg": "#1E1E1E","fg": "#DCDCDC","select_bg": "#264F78","button": "#007ACC"},
+    "One Monokai": {"bg": "#222430","fg": "#ABB2BF","select_bg": "#3E4451","button": "#61AFEF"},
+    "Bluloco Light": {"bg": "#F5F5F5","fg": "#4D4D4C","select_bg": "#D6D6D6","button": "#A1B56C"}
+}
