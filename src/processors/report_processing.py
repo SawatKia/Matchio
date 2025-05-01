@@ -6,7 +6,6 @@ import json
 from typing import Optional, Dict, Any, TypedDict, List
 from tabulate import tabulate
 
-
 from utils import get_logger, FileManager, DataFrameCleaner
 
 # Get the pre-configured logger
