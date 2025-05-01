@@ -1,4 +1,4 @@
-# Add these imports at the top of the file
+# src\gui\main_window.py
 import threading
 import time
 import os
@@ -84,16 +84,16 @@ class ApplicationGUI(tk.Tk):
         input_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
         # Purchase Tax Report
-        self._create_file_input_row(input_frame, "รายงานภาษีซื้อ / Purchase Tax Report:", "csv_exported_purchase_tax_report", 0)
+        self._create_file_input_row(input_frame, "รายงานภาษีซื้อ / Purchase Tax Report (.csv):", "csv_exported_purchase_tax_report", 0)
         
         # Sales Tax Report
-        self._create_file_input_row(input_frame, "รายงานภาษีขาย / Sales Tax Report:", "csv_exported_sales_tax_report", 1)
+        self._create_file_input_row(input_frame, "รายงานภาษีขาย / Sales Tax  (.csv):", "csv_exported_sales_tax_report", 1)
         
         # Withholding Tax Report
-        self._create_file_input_row(input_frame, "รายงานภาษีหัก ณ ที่จ่าย / Withholding Tax Report:", "excel_Withholding_tax_report", 2, is_excel=True)
+        self._create_file_input_row(input_frame, "รายงานภาษีหัก ณ ที่จ่าย / Withholding Tax Report (.xlsx):", "excel_Withholding_tax_report", 2, is_excel=True)
         
         # Bank Statement
-        self._create_file_input_row(input_frame, "รายการเดินบัญชี / Bank Statement:", "excel_statement", 3, is_excel=True)
+        self._create_file_input_row(input_frame, "รายการเดินบัญชี / Bank Statement (.xlsx):", "excel_statement", 3, is_excel=True)
         
         # Output Directory
         self._create_dir_input_row(input_frame, "โฟลเดอร์ผลลัพธ์ / Output Directory:", "output_dir", 4)
@@ -156,10 +156,10 @@ class ApplicationGUI(tk.Tk):
         progress_frame = ttk.Frame(status_frame)
         progress_frame.pack(fill=tk.X, padx=5, pady=5)
         
-        # Progress indicator
-        self.spinner_label = ttk.Label(progress_frame, text="⏳")
+        # Progress indicator (Spinner)
+        self.spinner_label = ttk.Label(progress_frame, text="") # Start empty
         self.spinner_label.pack(side=tk.LEFT, padx=5)
-        self.spinner_chars = ["⏳", "⌛", "⏳", "⌛"]
+        self.spinner_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] # More standard spinner
         self.spinner_idx = 0
         
         # Progress bar
