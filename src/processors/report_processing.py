@@ -360,6 +360,8 @@ class ReportProcess:
                 excel_filepath, 
                 default_path=self.reports_filepath["sale"]["withholding_tax"]
             )
+            sheets = FileManager.list_excel_sheets(excel_filepath)
+            logger.debug(f"Available sheets in the Excel file: {sheets}:: {type(sheets)}")
             logger.info(f"Processing withholding tax report from file: {excel_filepath}")
             
             # Set default sheet name if not provided
