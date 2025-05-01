@@ -8,7 +8,9 @@ from pathlib import Path
 import threading
 
 from .widgets import ThemeSelector, LanguageToggle, FileInput, DirectoryInput, LogViewer, ProgressTracker
-from utils import get_logger
+from utils import get_logger, CONFIG, EXPECTED_COLUMN_MAPPINGS
+import main # Import the main processing module
+import os # Import os for path joining
 
 logger = get_logger()
 
@@ -124,7 +126,8 @@ class ApplicationGUI(tk.Tk):
         self.setup_process_button()
         self.setup_log_viewer()
         self.setup_progress_tracker()
-        
+        self.setup_font_size_buttons() # Add font size buttons
+
         # Initialize file paths and other variables
         self.file_paths = {
             "purchase_report": "",
@@ -143,6 +146,9 @@ class ApplicationGUI(tk.Tk):
         self.processing = False
         self.process_start_time = 0
         
+        # Apply initial font settings
+        self.apply_font_size()
+
         logger.info("GUI initialized successfully")
 
     def create_frames(self):
@@ -307,59 +313,113 @@ class ApplicationGUI(tk.Tk):
             avg_time_label=self.texts[self.language]["avg_time"],
             processed_label=self.texts[self.language]["processed"]
         )
+    
+    def setup_font_size_buttons(self):
+        """Set up buttons to increase and decrease font size"""
+        self.font_size_frame = ttk.Frame(self.header_frame)
+        self.font_size_frame.pack(side=tk.RIGHT, padx=5, pady=5)
+
+        # Decrease font size button
+        self.decrease_font_button = ttk.Button(
+            self.font_size_frame,
+            text="A-",
+            width=3,
+            command=self.decrease_font_size
+        )
+        self.decrease_font_button.pack(side=tk.LEFT, padx=2)
+
+        # Increase font size button
+        self.increase_font_button = ttk.Button(
+            self.font_size_frame,
+            text="A+",
+            width=3,
+            command=self.increase_font_size
+        )
+        self.increase_font_button.pack(side=tk.LEFT, padx=2)
+
+        # Initial state check
+        self.update_font_size_buttons_state()
+    
+    def increase_font_size(self):
+        """Increase the font size if not at maximum"""
+        if self.current_font_size_idx < len(self.font_sizes) - 1:
+            self.current_font_size_idx += 1
+            self.update_fonts()
+            self.apply_font_size()
+            self.update_font_size_buttons_state()
+            logger.debug(f"Increased font size to {self.font_sizes[self.current_font_size_idx]}")
+
+    def decrease_font_size(self):
+        """Decrease the font size if not at minimum"""
+        if self.current_font_size_idx > 0:
+            self.current_font_size_idx -= 1
+            self.update_fonts()
+            self.apply_font_size()
+            self.update_font_size_buttons_state()
+            logger.debug(f"Decreased font size to {self.font_sizes[self.current_font_size_idx]}")
+
+    def update_fonts(self):
+        """Update font sizes in the fonts dictionary"""
+        self.fonts["en"] = ("Segoe UI", self.font_sizes[self.current_font_size_idx])
+        self.fonts["th"] = ("Noto Sans Thai", self.font_sizes[self.current_font_size_idx])
+
+    def update_font_size_buttons_state(self):
+        """Update the state of font size buttons based on current size"""
+        self.decrease_font_button.config(state=tk.NORMAL if self.current_font_size_idx > 0 else tk.DISABLED)
+        self.increase_font_button.config(state=tk.NORMAL if self.current_font_size_idx < len(self.font_sizes) - 1 else tk.DISABLED)
 
     def toggle_language(self):
         """Toggle between Thai and English languages"""
         self.language = "en" if self.language == "th" else "th"
         logger.info(f"Language changed to {self.language}")
-        
+
         # Update UI text
         self.title(self.texts[self.language]["title"])
-        
+
         # Update language toggle button
         self.language_toggle.config_text(self.texts[self.language]["toggle_language"])
-        
+
         # Update theme label
         self.theme_label.config(text=self.texts[self.language]["theme_label"])
-        
+
         # Update files section
         self.files_label.config(text=self.texts[self.language]["files_section"])
-        
+
         # Update file inputs
         self.purchase_report_input.update_texts(
             label_text=self.texts[self.language]["purchase_report_file"],
             button_text=self.texts[self.language]["browse"]
         )
-        
+
         self.sale_report_input.update_texts(
             label_text=self.texts[self.language]["sale_report_file"],
             button_text=self.texts[self.language]["browse"]
         )
-        
+
         self.withholding_tax_input.update_texts(
             label_text=self.texts[self.language]["withholding_tax_report_file"],
             button_text=self.texts[self.language]["browse"],
             dropdown_label=self.texts[self.language]["withholding_tax_sheet"]
         )
-        
+
         self.statement_input.update_texts(
             label_text=self.texts[self.language]["statement_file"],
             button_text=self.texts[self.language]["browse"],
             dropdown_label=self.texts[self.language]["statement_sheet"]
         )
-        
+
         self.output_dir_input.update_texts(
             label_text=self.texts[self.language]["output_dir"],
             button_text=self.texts[self.language]["browse"]
         )
-        
+
         # Update buttons
         self.process_button.config(text=self.texts[self.language]["process_button"])
         self.open_results_button.config(text=self.texts[self.language]["open_results"])
-        
+
         # Update log viewer
         self.log_label.config(text=self.texts[self.language]["log_label"])
-        
+
         # Update progress tracker
         self.progress_tracker.update_texts(
             progress_label=self.texts[self.language]["progress_label"],
@@ -370,6 +430,10 @@ class ApplicationGUI(tk.Tk):
             processed_label=self.texts[self.language]["processed"]
         )
 
+        # Re-apply font size after language change to ensure correct font is used
+        self.apply_font_size()
+
+
     def change_theme(self, theme_name):
         """Change the application theme"""
         self.current_theme = theme_name
@@ -379,13 +443,13 @@ class ApplicationGUI(tk.Tk):
     def apply_theme(self, theme_name):
         """Apply the selected theme to the application"""
         theme = THEME_COLORS.get(theme_name, THEME_COLORS[DEFAULT_THEME])
-        
+
         # Update root window
         self.configure(bg=theme["bg"])
-        
+
         # Create a custom ttk style
         style = ttk.Style(self)
-        
+
         # Configure the ttk styles
         style.configure("TFrame", background=theme["bg"])
         style.configure("TLabelframe", background=theme["bg"])
@@ -397,47 +461,104 @@ class ApplicationGUI(tk.Tk):
         style.configure("Vertical.TScrollbar", background=theme["button"], troughcolor=theme["bg"])
         style.configure("Horizontal.TScrollbar", background=theme["button"], troughcolor=theme["bg"])
         style.configure("TProgressbar", background=theme["select_bg"], troughcolor=theme["bg"])
-        
+
         # Map styles for different states
         style.map("TButton",
                 background=[("active", theme["select_bg"])],
                 foreground=[("active", theme["fg"])])
-        
+
         style.map("TCombobox",
                 fieldbackground=[("readonly", theme["bg"])],
                 selectbackground=[("readonly", theme["select_bg"])])
-        
+
         # Update any custom widgets that need theme updates
         if hasattr(self, "log_viewer"):
             self.log_viewer.update_theme(bg=theme["bg"], fg=theme["fg"])
-        
+
         if hasattr(self, "theme_selector"):
             self.theme_selector.update_theme(theme_name)
 
+        # Re-apply font size after theme change to ensure correct colors are used with the font
+        self.apply_font_size()
+
+    def apply_font_size(self):
+        """Apply font and size to all widgets based on current language"""
+        font_tuple = self.fonts[self.language]
+        logger.debug(f"Applying font: {font_tuple} for language: {self.language}")
+
+        # Create a custom ttk style for font
+        style = ttk.Style(self)
+        style.configure("TLabel", font=font_tuple)
+        style.configure("TLabelframe.Label", font=font_tuple)
+        style.configure("TButton", font=font_tuple)
+        style.configure("TCombobox", font=font_tuple)
+        style.configure("TEntry", font=font_tuple)
+
+        # Update specific widgets
+        self.files_label.config(font=(font_tuple[0], font_tuple[1], "bold"))
+        self.log_viewer.text.config(font=font_tuple)
+        self.progress_tracker.progress_percent.config(font=font_tuple)
+        self.progress_tracker.elapsed_value.config(font=font_tuple)
+        self.progress_tracker.eta_value.config(font=font_tuple)
+        self.progress_tracker.avg_time_value.config(font=font_tuple)
+        self.progress_tracker.processed_value.config(font=font_tuple)
+
+        # Update error window if open
+        for window in self.winfo_children():
+            if isinstance(window, tk.Toplevel):
+                for child in window.winfo_children():
+                    if isinstance(child, ttk.LabelFrame):
+                        child.config(font=font_tuple)
+                    elif isinstance(child, ttk.Label):
+                        child.config(font=font_tuple)
+                    elif isinstance(child, tk.Text):
+                        child.config(font=font_tuple)
+                    elif isinstance(child, ttk.Button):
+                        child.config(font=font_tuple)
+
     def update_file_path(self, file_key, path):
-        """Update file path in the dictionary"""
+        """Update file path in the dictionary and main config"""
         self.file_paths[file_key] = path
         logger.debug(f"Updated {file_key} path to: {path}")
-        
+
+        # Update CONFIG based on file_key
+        if file_key == "purchase_report":
+            CONFIG['csv_exported_purchase_tax_report'] = path
+        elif file_key == "sale_report":
+            CONFIG['csv_exported_sales_tax_report'] = path
+        elif file_key == "withholding_tax_report":
+            CONFIG['excel_Withholding_tax_report'] = path
+        elif file_key == "statement_file":
+            CONFIG['excel_statement'] = path
+        elif file_key == "output_dir":
+            CONFIG['output_dir'] = path
+
+
         # If it's an Excel file, update the available sheets
         if file_key in ["withholding_tax_report", "statement_file"] and path.endswith((".xlsx", ".xls")):
             try:
                 xl = pd.ExcelFile(path)
                 sheets = xl.sheet_names
-                
+
                 if file_key == "withholding_tax_report":
                     self.withholding_tax_input.update_dropdown_values(sheets)
                 elif file_key == "statement_file":
                     self.statement_input.update_dropdown_values(sheets)
-                    
+
                 logger.debug(f"Updated sheets for {file_key}: {sheets}")
             except Exception as e:
                 self.show_error(f"Could not read sheets from {path}", str(e))
 
     def update_sheet_selection(self, sheet_key, sheet_name):
-        """Update selected sheet name in the dictionary"""
+        """Update selected sheet name in the dictionary and main config"""
         self.sheet_selections[sheet_key] = sheet_name
         logger.debug(f"Selected {sheet_key}: {sheet_name}")
+
+        # Update main.EXPECTED_COLUMN_MAPPINGS with the selected sheet name
+        # Assuming the sheet name is used within the processing logic
+        # This might need adjustment based on how sheet names are used in main.py
+        # For now, just store it in the GUI's sheet_selections
+        pass # Sheet selection logic will be handled when calling main.py functions
 
     def validate_inputs(self):
         """Validate all inputs before processing"""
@@ -446,17 +567,18 @@ class ApplicationGUI(tk.Tk):
             "sale_report": self.texts[self.language]["sale_report_file"],
             "output_dir": self.texts[self.language]["output_dir"]
         }
-        
+
         # Check required fields
-        for field, label in required_fields.items():
-            if not self.file_paths[field]:
-                return False, f"{label} is required."
-        
+        missing_fields = [label for field, label in required_fields.items() if not self.file_paths[field]]
+        if missing_fields:
+            # Use the specific Thai error message for missing files
+            return False, "กรุณาเลือกไฟล์ให้ครบ" # "Please select all required files"
+
         # Check if the files exist
         for field in ["purchase_report", "sale_report"]:
             if not Path(self.file_paths[field]).exists():
                 return False, f"{required_fields[field]} does not exist."
-        
+
         # Check output directory
         if not Path(self.file_paths["output_dir"]).exists():
             try:
@@ -464,24 +586,24 @@ class ApplicationGUI(tk.Tk):
                 logger.info(f"Created output directory: {self.file_paths['output_dir']}")
             except Exception as e:
                 return False, f"Could not create output directory: {str(e)}"
-        
+
         # Check optional files if provided
         optional_files = {
             "withholding_tax_report": self.texts[self.language]["withholding_tax_report_file"],
             "statement_file": self.texts[self.language]["statement_file"]
         }
-        
+
         for field, label in optional_files.items():
             if self.file_paths[field] and not Path(self.file_paths[field]).exists():
                 return False, f"{label} does not exist."
-        
-        # Check sheet selections for Excel files
+
+        # Check sheet selections for Excel files if the file path is provided
         if self.file_paths["withholding_tax_report"] and not self.sheet_selections["withholding_tax_sheet"]:
-            return False, f"{self.texts[self.language]['withholding_tax_sheet']} is required."
-            
+             return False, f"{self.texts[self.language]['withholding_tax_sheet']} is required."
+
         if self.file_paths["statement_file"] and not self.sheet_selections["statement_sheet"]:
-            return False, f"{self.texts[self.language]['statement_sheet']} is required."
-        
+             return False, f"{self.texts[self.language]['statement_sheet']} is required."
+
         return True, ""
 
     def start_processing(self):
@@ -491,78 +613,96 @@ class ApplicationGUI(tk.Tk):
         if not valid:
             self.show_error("Invalid Input", message)
             return
-        
+
         # Disable process button
         self.process_button.config(state=tk.DISABLED)
-        
+
         # Reset progress
         self.progress_tracker.reset()
-        
+
         # Clear log
         self.log_viewer.clear()
-        
+
         # Log start of processing
         logger.info("Starting data processing")
         self.log_viewer.add_message("Starting data processing...")
-        
+
         # Set processing flag and start time
         self.processing = True
         self.process_start_time = time.time()
-        
+
         # Start processing in a separate thread
         threading.Thread(target=self.process_data, daemon=True).start()
 
     def process_data(self):
-        """Process the data (placeholder for actual processing)"""
+        """Process the data by calling main.py functions"""
         try:
-            # This would be replaced with your actual processing logic
-            total_items = 100
-            
-            for i in range(total_items + 1):
-                if not self.processing:
-                    break
-                
-                # Update progress
-                progress = i / total_items
-                elapsed = time.time() - self.process_start_time
-                
-                # Calculate timing info
-                if i > 0:
-                    avg_time = elapsed / i
-                    eta = avg_time * (total_items - i)
-                else:
-                    avg_time = 0
-                    eta = 0
-                
-                # Log progress
-                if i % 10 == 0:
-                    self.log_viewer.add_message(f"Processing item {i} of {total_items}")
-                
-                # Update UI with progress
-                self.update_progress(progress, i, total_items, elapsed, eta, avg_time)
-                
-                # Simulate processing time
-                time.sleep(0.1)
-            
+            # Initialize services
+            main.initialize_services(progress_callback=self._update_gui_progress)
+
+            # Process reports
+            purchase_df, sale_df, withholding_df, statement_df = main.process_report_files(progress_callback=self._update_gui_progress)
+
+            # Perform matching and generate reports
+            report_dfs = main.perform_matching_and_generate_reports(
+                purchase_df,
+                sale_df,
+                withholding_df,
+                statement_df,
+                CONFIG,
+                EXPECTED_COLUMN_MAPPINGS,
+                progress_callback=self._update_gui_progress
+            )
+
+            # Save the generated reports
+            main.save_reports(CONFIG['output_dir'], *report_dfs, progress_callback=self._update_gui_progress)
+
             # Complete processing
-            if self.processing:
-                self.complete_processing()
-                
+            self.complete_processing()
+
         except Exception as e:
             # Handle any errors
-            self.show_error("Processing Error", str(e))
+            self.show_error("Processing Error", str(e), detailed_error=traceback.format_exc())
             logger.error(f"Error during processing: {str(e)}")
             self.reset_processing()
 
+    def _update_gui_progress(self, message, progress=None, current=None, total=None, elapsed=None, eta=None, avg_time=None, is_error=False, is_warning=False):
+        """Callback function to update the GUI from the processing thread."""
+        # Use after() to safely update GUI elements from a different thread
+        self.after(0, lambda: self._do_update_gui_progress(message, progress, current, total, elapsed, eta, avg_time, is_error, is_warning))
+
+    def _do_update_gui_progress(self, message, progress, current, total, elapsed, eta, avg_time, is_error, is_warning):
+        """Actual GUI update logic (runs in the main thread)."""
+        # Add message to log viewer
+        self.log_viewer.add_message(message)
+
+        # Update progress tracker if relevant info is provided
+        if progress is not None and current is not None and total is not None:
+             # Calculate elapsed, eta, avg_time if not provided
+            if elapsed is None:
+                elapsed = time.time() - self.process_start_time
+            if current > 0:
+                avg_time = elapsed / current
+                eta = avg_time * (total - current)
+            else:
+                avg_time = 0
+                eta = 0
+
+            self.progress_tracker.update(progress, current, total, elapsed, eta, avg_time)
+
+
     def update_progress(self, progress, current, total, elapsed, eta, avg_time):
         """Update progress bar and timing info"""
-        # Use after() to update UI from the worker thread
+        # This method is no longer directly called by the processing thread.
+        # The _update_gui_progress callback handles updates.
+        # Keep this method for now in case it's used elsewhere, but it might be redundant.
+        logger.debug("update_progress called (might be redundant)")
         self.after(0, lambda: self.progress_tracker.update(
-            progress, 
-            current, 
-            total, 
-            elapsed, 
-            eta, 
+            progress,
+            current,
+            total,
+            elapsed,
+            eta,
             avg_time
         ))
 
@@ -570,16 +710,16 @@ class ApplicationGUI(tk.Tk):
         """Handle completion of processing"""
         # Calculate total elapsed time
         elapsed = time.time() - self.process_start_time
-        
+
         # Log completion
         completion_message = f"Processing completed in {elapsed:.2f} seconds"
         logger.info(completion_message)
         self.log_viewer.add_message(completion_message)
-        
+
         # Update UI
         self.after(0, lambda: self.progress_tracker.complete())
         self.after(0, lambda: self.enable_results_button())
-        
+
         # Reset processing state
         self.reset_processing()
 
@@ -596,15 +736,15 @@ class ApplicationGUI(tk.Tk):
         """Open the results file or directory"""
         import os
         import subprocess
-        
+
         try:
             output_dir = self.file_paths["output_dir"]
-            
+
             # Check if directory exists
             if not Path(output_dir).exists():
                 self.show_error("Error", "Output directory does not exist")
                 return
-            
+
             # Open the directory
             if os.name == 'nt':  # Windows
                 os.startfile(output_dir)
@@ -612,7 +752,7 @@ class ApplicationGUI(tk.Tk):
                 subprocess.call(['open', output_dir])
             else:  # Linux
                 subprocess.call(['xdg-open', output_dir])
-                    
+
             logger.info(f"Opened results directory: {output_dir}")
         except Exception as e:
             self.show_error("Error Opening Results", str(e))
@@ -620,59 +760,68 @@ class ApplicationGUI(tk.Tk):
     def show_error(self, title, message, detailed_error=None):
         """Show error dialog with user-friendly and developer versions"""
         logger.error(f"Error: {title} - {message}")
-        
+
+        # If detailed_error is not provided, capture the current exception traceback
         if detailed_error is None:
             detailed_error = traceback.format_exc()
-            
+
         # Create custom error dialog
         error_window = tk.Toplevel(self)
         error_window.title(self.texts[self.language]["error_title"])
         error_window.geometry("600x400")
-        error_window.transient(self)
-        error_window.grab_set()
-        
+        error_window.transient(self) # Keep error window on top of main window
+        error_window.grab_set() # Prevent interaction with main window while error is open
+
+        # Font settings
+        self.font_sizes = [8, 10, 12, 14, 16, 18, 20]  # Available font sizes
+        self.current_font_size_idx = 2  # Default to 12pt
+        self.fonts = {
+            "en": ("Segoe UI", self.font_sizes[self.current_font_size_idx]),
+            "th": ("Noto Sans Thai", self.font_sizes[self.current_font_size_idx])
+        }
+
         # Apply the current theme
         theme = THEME_COLORS.get(self.current_theme, THEME_COLORS[DEFAULT_THEME])
         error_window.configure(bg=theme["bg"])
-        
+
         # User error frame
         user_frame = ttk.LabelFrame(
-            error_window, 
+            error_window,
             text=self.texts[self.language]["user_error_label"]
         )
         user_frame.pack(fill=tk.X, expand=False, padx=10, pady=10)
-        
+
         user_error = ttk.Label(
-            user_frame, 
-            text=message,
+            user_frame,
+            text=message, # This is the simplified message for the user
             wraplength=550
         )
         user_error.pack(padx=10, pady=10, fill=tk.X)
-        
+
         # Developer error frame
         dev_frame = ttk.LabelFrame(
-            error_window, 
+            error_window,
             text=self.texts[self.language]["dev_error_label"]
         )
         dev_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        
+
         # Create a text widget for detailed error
         error_text = tk.Text(
-            dev_frame, 
+            dev_frame,
             wrap=tk.WORD,
             background=theme["bg"],
             foreground=theme["fg"],
             height=10
         )
         error_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        error_text.insert(tk.END, detailed_error)
-        error_text.config(state=tk.DISABLED)
-        
+        error_text.insert(tk.END, detailed_error) # This is the detailed traceback/log
+        error_text.config(state=tk.DISABLED) # Make text read-only
+
         # Add scrollbar
         scrollbar = ttk.Scrollbar(error_text, command=error_text.yview)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         error_text.config(yscrollcommand=scrollbar.set)
-        
+
         # Close button
         close_button = ttk.Button(
             error_window,
