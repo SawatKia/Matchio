@@ -1,0 +1,110 @@
+from utils import get_logger
+
+logger = get_logger()
+
+class TranslationManager:
+    """Handles language translations for the UI"""
+    TRANSLATIONS = {
+        "en": {
+            "window_title": "Transaction Matcher",
+            "files_tab": "Files",
+            "settings_tab": "Settings",
+            "process_tab": "Process",
+            "input_files": "Input Files",
+            "language": "Language:",
+            "thai": "Thai",
+            "english": "English",
+            "purchase_tax": "Purchase Tax Report (.csv):",
+            "sales_tax": "Sales Tax Report (.csv):",
+            "withholding_tax": "Withholding Tax Report (.xlsx):",
+            "bank_statement": "Bank Statement (.xlsx):",
+            "output_dir": "Output Directory:",
+            "browse": "Browse",
+            "open": "Open", 
+            "reset": "Reset",
+            "start_processing": "Start Processing",
+            "exit": "Exit",
+            "copy_clipboard": "Copy to Clipboard",
+            "settings": "Settings",
+            "sheet": "Sheet:",
+            "font_size": "Font Size",
+            "matching_params": "Matching Parameters",
+            "credit_days": "Credit Days:",
+            "sale_tolerance": "Sale Tolerance:",
+            "purchase_tolerance": "Purchase Tolerance:",
+            "open_output": "Open Output Directory",
+            "status": "Status",
+            "elapsed": "Elapsed:",
+            "eta": "ETA:",
+            "items": "Items:",
+            "ready": "Ready",
+            "processing": "Processing...",
+            "complete": "Complete",
+            "missing_files": "Please select the following files:",
+            "error": "Error",
+            "developer_error": "Developer Error Details",
+            "success": "Success",
+            "processing_complete": "Processing complete! Reports saved to: {}",
+            "cleaning_progress": "Cleaning files: {}/4",
+            "matching_progress": "Matching transactions: {}%",
+            "avg_time": "Avg Time: {}",
+            "items_processed": "Processed: {}/{}"
+        },
+        "th": {
+            "window_title": "โปรแกรมจับคู่ธุรกรรม",
+            "files_tab": "ไฟล์",
+            "settings_tab": "ตั้งค่า",
+            "process_tab": "ประมวลผล",
+            "input_files": "ไฟล์นำเข้า",
+            "language": "ภาษา:",
+            "thai": "ไทย",
+            "english": "English",
+            "purchase_tax": "รายงานภาษีซื้อ (.csv):",
+            "sales_tax": "รายงานภาษีขาย (.csv):",
+            "withholding_tax": "รายงานภาษีหัก ณ ที่จ่าย (.xlsx):",
+            "bank_statement": "รายการเดินบัญชี (.xlsx):",
+            "output_dir": "โฟลเดอร์ผลลัพธ์:",
+            "browse": "เลือก",
+            "open": "เปิด",
+            "reset": "รีเซ็ต",
+            "start_processing": "เริ่มการจับคู่",
+            "exit": "ออก",
+            "copy_clipboard": "คัดลอกไปคลิปบอร์ด",
+            "settings": "การตั้งค่า",
+            "sheet": "ชีต:",
+            "font_size": "ขนาดตัวอักษร",
+            "matching_params": "เงื่อนไขการจับคู่",
+            "credit_days": "ระยะเวลาเครดิต:",
+            "sale_tolerance": "ความคลาดเคลื่อนการขาย:",
+            "purchase_tolerance": "ความคลาดเคลื่อนการซื้อ:",
+            "open_output": "เปิดโฟลเดอร์ผลลัพธ์",
+            "status": "สถานะ",
+            "elapsed": "เวลาที่ใช้:",
+            "eta": "เวลาที่คาดว่าเหลือ:",
+            "items": "จำนวน:",
+            "ready": "พร้อมใช้งาน",
+            "processing": "กำลังประมวลผล...",
+            "complete": "เสร็จสิ้น",
+            "missing_files": "กรุณาเลือกไฟล์ต่อไปนี้:",
+            "error": "ข้อผิดพลาด",
+            "developer_error": "รายละเอียดข้อผิดพลาดสำหรับนักพัฒนา",
+            "success": "สำเร็จ",
+            "processing_complete": "ประมวลผลเสร็จสิ้น! บันทึกผลลัพธ์ที่: {}",
+            "cleaning_progress": "กำลังทำความสะอาดไฟล์: {}/4",
+            "matching_progress": "กำลังจับคู่ธุรกรรม: {}%",
+            "avg_time": "เวลาเฉลี่ย: {}",
+            "items_processed": "ประมวลผลแล้ว: {}/{}"
+        }
+    }
+
+    @classmethod
+    def get_translation(cls, language: str, key: str, *format_args) -> str:
+        """Get translation for a key in the specified language"""
+        try:
+            translation = cls.TRANSLATIONS[language][key]
+            if format_args:
+                return translation.format(*format_args)
+            return translation
+        except KeyError:
+            logger.warning(f"Missing translation for key: {key}")
+            return key

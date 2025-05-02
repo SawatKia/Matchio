@@ -3,6 +3,8 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Dict, Any
 
+from .translation import TranslationManager
+
 class MatchingConstants:
     """Holds configurable matching parameters that can be modified by users"""
     
@@ -13,7 +15,7 @@ class MatchingConstants:
     }
     
     @staticmethod
-    def create_config_panel(parent: ttk.Frame, config: Dict[str, Any]) -> Dict[str, tk.Variable]:
+    def create_config_panel(parent: ttk.Frame, config: Dict[str, Any], language: str) -> Dict[str, Any]:
         """Create a panel for configuring matching constants
         
         Args:
@@ -21,44 +23,55 @@ class MatchingConstants:
             config: Current configuration dictionary
             
         Returns:
-            Dictionary of tkinter variables bound to the widgets
+            Dictionary containing tkinter variables and widgets
         """
-        frame = ttk.LabelFrame(parent, text="เงื่อนไขการจับคู่ / Matching Parameters")
-        frame.pack(fill=tk.X, padx=5, pady=5)
+        # Dictionary to store variables and widgets
+        result = {
+            'variables': {},
+            'widgets': {}
+        }
         
-        # Dictionary to store variables
-        variables = {}
+        frame = ttk.LabelFrame(parent, text=TranslationManager.get_translation(language, "matching_params"))
+        frame.pack(fill=tk.X, padx=5, pady=5)
+        result['widgets']['frame'] = frame
         
         # Create input for credit days
-        ttk.Label(frame, text="ระยะเวลาเครดิต / Credit Days:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
+        credit_label = ttk.Label(frame, text=TranslationManager.get_translation(language, "matching_credit_days"))
+        credit_label.grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
         credit_var = tk.IntVar(value=config.get('matching_credit_days', MatchingConstants.DEFAULT_VALUES['matching_credit_days']))
         credit_entry = ttk.Spinbox(frame, from_=1, to=90, textvariable=credit_var, width=10)
         credit_entry.grid(row=0, column=1, sticky=tk.W, padx=5, pady=5)
-        variables['matching_credit_days'] = credit_var
+        result['variables']['matching_credit_days'] = credit_var
+        result['widgets']['credit_label'] = credit_label
         
         # Create input for sale tolerance
-        ttk.Label(frame, text="ความคลาดเคลื่อนการขาย / Sale Tolerance:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
+        sale_tolerance_label = ttk.Label(frame, text=TranslationManager.get_translation(language, "matching_sale_tolerance"))
+        sale_tolerance_label.grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
         sale_var = tk.DoubleVar(value=config.get('matching_sale_tolerance', MatchingConstants.DEFAULT_VALUES['matching_sale_tolerance']))
         sale_entry = ttk.Spinbox(frame, from_=0, to=10000, increment=100, textvariable=sale_var, width=10)
         sale_entry.grid(row=1, column=1, sticky=tk.W, padx=5, pady=5)
-        variables['matching_sale_tolerance'] = sale_var
+        result['variables']['matching_sale_tolerance'] = sale_var
+        result['widgets']['sale_tolerance_label'] = sale_tolerance_label
         
         # Create input for purchase tolerance
-        ttk.Label(frame, text="ความคลาดเคลื่อนการซื้อ / Purchase Tolerance:").grid(row=2, column=0, sticky=tk.W, padx=5, pady=5)
+        purchase_tolerance_label = ttk.Label(frame, text=TranslationManager.get_translation(language, "matching_purchase_tolerance"))
+        purchase_tolerance_label.grid(row=2, column=0, sticky=tk.W, padx=5, pady=5)
         purchase_var = tk.DoubleVar(value=config.get('matching_purchase_tolerance', MatchingConstants.DEFAULT_VALUES['matching_purchase_tolerance']))
         purchase_entry = ttk.Spinbox(frame, from_=0, to=1000, increment=10, textvariable=purchase_var, width=10)
         purchase_entry.grid(row=2, column=1, sticky=tk.W, padx=5, pady=5)
-        variables['matching_purchase_tolerance'] = purchase_var
+        result['variables']['matching_purchase_tolerance'] = purchase_var
+        result['widgets']['purchase_tolerance_label'] = purchase_tolerance_label
         
         # Reset button
         reset_button = ttk.Button(
             frame, 
             text="รีเซ็ต / Reset", 
-            command=lambda: MatchingConstants._reset_values(variables)
+            command=lambda: MatchingConstants._reset_values(result['variables'])
         )
         reset_button.grid(row=3, column=1, sticky=tk.E, padx=5, pady=5)
+        result['widgets']['reset_button'] = reset_button
         
-        return variables
+        return result
     
     @staticmethod
     def _reset_values(variables: Dict[str, tk.Variable]) -> None:

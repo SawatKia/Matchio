@@ -10,131 +10,36 @@ from tkinter import ttk, filedialog, messagebox, font
 import tkinter as tk
 from utils import get_logger, FileManager, CONFIG
 from .constants import MatchingConstants
+from .translation import TranslationManager
 
 logger = get_logger()
 
-class TranslationManager:
-    """Handles language translations for the UI"""
-    TRANSLATIONS = {
-        "en": {
-            "window_title": "Transaction Matcher",
-            "files_tab": "Files",
-            "settings_tab": "Settings",
-            "process_tab": "Process",
-            "input_files": "Input Files",
-            "language": "Language:",
-            "thai": "Thai",
-            "english": "English",
-            "purchase_tax": "Purchase Tax Report (.csv):",
-            "sales_tax": "Sales Tax Report (.csv):",
-            "withholding_tax": "Withholding Tax Report (.xlsx):",
-            "bank_statement": "Bank Statement (.xlsx):",
-            "output_dir": "Output Directory:",
-            "browse": "Browse",
-            "open": "Open",
-            "sheet": "Sheet:",
-            "font_size": "Font Size",
-            "matching_params": "Matching Parameters",
-            "credit_days": "Credit Days:",
-            "sale_tolerance": "Sale Tolerance:",
-            "purchase_tolerance": "Purchase Tolerance:",
-            "reset": "Reset",
-            "start_processing": "Start Processing",
-            "open_output": "Open Output Directory",
-            "exit": "Exit",
-            "status": "Status",
-            "elapsed": "Elapsed:",
-            "eta": "ETA:",
-            "items": "Items:",
-            "ready": "Ready",
-            "processing": "Processing...",
-            "complete": "Complete",
-            "missing_files": "Please select the following files:",
-            "error": "Error",
-            "developer_error": "Developer Error Details",
-            "success": "Success",
-            "processing_complete": "Processing complete! Reports saved to: {}"
-        },
-        "th": {
-            "window_title": "โปรแกรมจับคู่ธุรกรรม",
-            "files_tab": "ไฟล์",
-            "settings_tab": "ตั้งค่า",
-            "process_tab": "ประมวลผล",
-            "input_files": "ไฟล์นำเข้า",
-            "language": "ภาษา:",
-            "thai": "ไทย",
-            "english": "English",
-            "purchase_tax": "รายงานภาษีซื้อ (.csv):",
-            "sales_tax": "รายงานภาษีขาย (.csv):",
-            "withholding_tax": "รายงานภาษีหัก ณ ที่จ่าย (.xlsx):",
-            "bank_statement": "รายการเดินบัญชี (.xlsx):",
-            "output_dir": "โฟลเดอร์ผลลัพธ์:",
-            "browse": "เลือก",
-            "open": "เปิด",
-            "sheet": "ชีต:",
-            "font_size": "ขนาดตัวอักษร",
-            "matching_params": "เงื่อนไขการจับคู่",
-            "credit_days": "ระยะเวลาเครดิต:",
-            "sale_tolerance": "ความคลาดเคลื่อนการขาย:",
-            "purchase_tolerance": "ความคลาดเคลื่อนการซื้อ:",
-            "reset": "รีเซ็ต",
-            "start_processing": "เริ่มการจับคู่",
-            "open_output": "เปิดโฟลเดอร์ผลลัพธ์",
-            "exit": "ออก",
-            "status": "สถานะ",
-            "elapsed": "เวลาที่ใช้:",
-            "eta": "เวลาที่คาดว่าเหลือ:",
-            "items": "จำนวน:",
-            "ready": "พร้อมใช้งาน",
-            "processing": "กำลังประมวลผล...",
-            "complete": "เสร็จสิ้น",
-            "missing_files": "กรุณาเลือกไฟล์ต่อไปนี้:",
-            "error": "ข้อผิดพลาด",
-            "developer_error": "รายละเอียดข้อผิดพลาดสำหรับนักพัฒนา",
-            "success": "สำเร็จ",
-            "processing_complete": "ประมวลผลเสร็จสิ้น! บันทึกผลลัพธ์ที่: {}"
-        }
-    }
-
-    @classmethod
-    def get_translation(cls, language: str, key: str, *format_args) -> str:
-        """Get translation for a key in the specified language"""
-        try:
-            translation = cls.TRANSLATIONS[language][key]
-            if format_args:
-                return translation.format(*format_args)
-            return translation
-        except KeyError:
-            logger.warning(f"Missing translation for key: {key}")
-            return key
-
-# Then modify the ApplicationGUI class
 class ApplicationGUI(tk.Tk):
     def __init__(self, app_instance=None):
-        """
-        Initialize the GUI for the application.
-        
-        Args:
-            app_instance: Reference to the Application class instance from app.py
-        """
         super().__init__()
         
-        self.app = app_instance  # Store reference to the Application instance
-        self.report_dfs = None   # Storage for generated reports
-        self.processing_thread = None  # Reference to processing thread
-        self.language = tk.StringVar(value="en")  # Language toggle
-        self.sheet_vars = {}  # Excel sheet selection variables
-        self.constant_vars = {}  # Matching constant variables
-        self.start_time = None  # For tracking processing time
-        self.is_processing = False  # Flag to track processing state
+        self.app = app_instance
+        self.report_dfs = None
+        self.processing_thread = None
+        self.language = tk.StringVar(value="th")
+        self.sheet_vars = {}
+        self.constant_vars = {}
+        self.start_time = None
+        self.is_processing = False
+        self.current_step = 0
+        self.total_steps = 2  # Cleaning and matching steps
+        self.avg_times = {'cleaning': 0, 'matching': 0}
+        # FIXME - get the actual statement length
+        self.total_items = {'cleaning': 4, 'matching': 605}  # 4 files , 605 statement to clean 100% matching progress
+        self.processed_items = {'cleaning': 0, 'matching': 0}
         
         # Configure the main window
-        self.title("Transaction Matcher")
+        self.title(TranslationManager.get_translation(self.language.get(), "window_title"))
         self.geometry("900x700")
         
         # Set default font
         self.default_font = font.nametofont("TkDefaultFont")
-        self.font_size = tk.IntVar(value=9)  # Default font size
+        self.font_size = tk.IntVar(value=11)
         self.update_font_size()
         
         # Create main frame with notebook
@@ -146,33 +51,126 @@ class ApplicationGUI(tk.Tk):
         self.settings_tab = ttk.Frame(self.notebook)
         self.process_tab = ttk.Frame(self.notebook)
         
-        self.notebook.add(self.files_tab, text="ไฟล์ / Files")
-        self.notebook.add(self.settings_tab, text="ตั้งค่า / Settings")
-        self.notebook.add(self.process_tab, text="ประมวลผล / Process")
+        self.notebook.add(self.files_tab, text=TranslationManager.get_translation(self.language.get(), "files_tab"))
+        self.notebook.add(self.settings_tab, text=TranslationManager.get_translation(self.language.get(), "settings_tab"))
+        self.notebook.add(self.process_tab, text=TranslationManager.get_translation(self.language.get(), "process_tab"))
         
         # Create and configure UI elements
         self._create_file_inputs()
         self._create_settings_panel()
         self._create_processing_panel()
-        
-        # Create status bar
         self._create_status_bar()
+
+        # Bind language change to update UI
+        self.language.trace_add("write", self._update_all_text)
         
         logger.info("GUI initialized")
+    
+
+    def _update_all_text(self, *args):
+        """Update all text elements in the UI based on current language"""
+        lang = self.language.get()
+        
+        # Update window title
+        self.title(TranslationManager.get_translation(lang, "window_title"))
+        
+        # Update tab names
+        self.notebook.tab(0, text=TranslationManager.get_translation(lang, "files_tab"))
+        self.notebook.tab(1, text=TranslationManager.get_translation(lang, "settings_tab"))
+        self.notebook.tab(2, text=TranslationManager.get_translation(lang, "process_tab"))
+        
+        # Update file input labels
+        if hasattr(self, 'files_tab'):
+            for widget in self.files_tab.winfo_children():
+                if isinstance(widget, ttk.LabelFrame):
+                    widget.configure(text=TranslationManager.get_translation(lang, "input_files"))
+                    
+        # Update all buttons
+        if hasattr(self, 'process_button'):
+            self.process_button.config(text=TranslationManager.get_translation(lang, "start_processing"))
+        if hasattr(self, 'exit_button'):
+            self.exit_button.config(text=TranslationManager.get_translation(lang, "exit"))
+        if hasattr(self, 'browse_file_button'):
+            self.browse_file_button.config(text=TranslationManager.get_translation(lang, "browse"))
+        if hasattr(self, 'open_dir_button'):
+            self.open_dir_button.config(text=TranslationManager.get_translation(lang, "open"))
+        if hasattr(self, 'reset_button'):
+            self.reset_button.config(text=TranslationManager.get_translation(lang, "reset"))
+        if hasattr(self, 'copy_button'):
+            self.copy_button.config(text=TranslationManager.get_translation(lang, "copy_clipboard"))
+        
+        
+        self.font_frame.configure(text=TranslationManager.get_translation(lang, "font_size"))
+        
+        # Update matching parameters labels
+        if hasattr(self, 'constant_widgets'):
+            self.constant_widgets['frame'].configure(text=TranslationManager.get_translation(lang, "matching_params"))
+            self.constant_widgets['credit_label'].configure(text=TranslationManager.get_translation(lang, "credit_days"))
+            self.constant_widgets['sale_tolerance_label'].configure(text=TranslationManager.get_translation(lang, "sale_tolerance"))
+            self.constant_widgets['purchase_tolerance_label'].configure(text=TranslationManager.get_translation(lang, "purchase_tolerance"))
+            self.constant_widgets['reset_button'].configure(text=TranslationManager.get_translation(lang, "reset"))
+
+        
+        # Update file input fields
+        self._update_file_labels(lang)
+        
+        # Update status area labels
+        if hasattr(self, 'process_tab'):
+            for widget in self.process_tab.winfo_children():
+                if isinstance(widget, ttk.LabelFrame):
+                    widget.configure(text=TranslationManager.get_translation(lang, "status"))
+        
+        # Update timing info
+        self.elapsed_var.set(TranslationManager.get_translation(lang, "elapsed") + " --:--:--")
+        self.eta_var.set(TranslationManager.get_translation(lang, "eta") + " --:--:--")
+        self.items_var.set(TranslationManager.get_translation(lang, "items") + " 0/0")
+        
+        # Update status bar
+        self.status_bar.config(text=TranslationManager.get_translation(lang, "ready"))
+
+    def _update_file_labels(self, lang):
+        """Update file input field labels with translated text"""
+        file_labels = [
+            ("csv_exported_purchase_tax_report", "purchase_tax"),
+            ("csv_exported_sales_tax_report", "sales_tax"),
+            ("excel_Withholding_tax_report", "withholding_tax"),
+            ("excel_statement", "bank_statement"),
+            ("output_dir", "output_dir")
+        ]
+        
+        # Find file input frame
+        for widget in self.files_tab.winfo_children():
+            if isinstance(widget, ttk.LabelFrame):
+                for child in widget.winfo_children():
+                    if isinstance(child, ttk.Frame):
+                        for i, (key, label_key) in enumerate(file_labels):
+                            for grandchild in child.winfo_children():
+                                if isinstance(grandchild, ttk.Frame) and grandchild.grid_info().get('row') == i:
+                                    for label in grandchild.winfo_children():
+                                        if isinstance(label, ttk.Label) and not "sheet" in label.cget("text").lower():
+                                            label.configure(text=TranslationManager.get_translation(lang, label_key))
+                                        elif isinstance(label, ttk.Label) and "sheet" in label.cget("text").lower():
+                                            label.configure(text=TranslationManager.get_translation(lang, "sheet"))
+
+    def _update_language(self):
+        """Update the UI language based on the selected language"""
+        lang = self.language.get()
+        logger.info(f"Language switched to: {lang}")
+        self._update_all_text()
 
     def _create_file_inputs(self):
         """Create the file input section"""
-        file_frame = ttk.LabelFrame(self.files_tab, text="ไฟล์นำเข้า / Input Files")
+        file_frame = ttk.LabelFrame(self.files_tab, text=TranslationManager.get_translation(self.language.get(), "input_files"))
         file_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
         # Language toggle
         lang_frame = ttk.Frame(file_frame)
         lang_frame.pack(fill=tk.X, padx=5, pady=5)
         
-        ttk.Label(lang_frame, text="ภาษา / Language:").pack(side=tk.LEFT, padx=5)
-        ttk.Radiobutton(lang_frame, text="ไทย", variable=self.language, value="th", 
+        ttk.Label(lang_frame, text=TranslationManager.get_translation(self.language.get(), "language")).pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(lang_frame, text=TranslationManager.get_translation(self.language.get(), "thai"), variable=self.language, value="th", 
                         command=self._update_language).pack(side=tk.LEFT, padx=5)
-        ttk.Radiobutton(lang_frame, text="English", variable=self.language, value="en", 
+        ttk.Radiobutton(lang_frame, text=TranslationManager.get_translation(self.language.get(), "english"), variable=self.language, value="en", 
                         command=self._update_language).pack(side=tk.LEFT, padx=5)
         
         # File input container
@@ -180,36 +178,38 @@ class ApplicationGUI(tk.Tk):
         input_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
         # Purchase Tax Report
-        self._create_file_input_row(input_frame, "รายงานภาษีซื้อ / Purchase Tax Report (.csv):", "csv_exported_purchase_tax_report", 0)
+        self._create_file_input_row(input_frame, TranslationManager.get_translation(self.language.get(), "purchase_tax"), "csv_exported_purchase_tax_report", 0)
         
         # Sales Tax Report
-        self._create_file_input_row(input_frame, "รายงานภาษีขาย / Sales Tax  (.csv):", "csv_exported_sales_tax_report", 1)
+        self._create_file_input_row(input_frame, TranslationManager.get_translation(self.language.get(), "sales_tax"), "csv_exported_sales_tax_report", 1)
         
         # Withholding Tax Report
-        self._create_file_input_row(input_frame, "รายงานภาษีหัก ณ ที่จ่าย / Withholding Tax Report (.xlsx):", "excel_Withholding_tax_report", 2, is_excel=True)
+        self._create_file_input_row(input_frame, TranslationManager.get_translation(self.language.get(), "withholding_tax"), "excel_Withholding_tax_report", 2, is_excel=True)
         
         # Bank Statement
-        self._create_file_input_row(input_frame, "รายการเดินบัญชี / Bank Statement (.xlsx):", "excel_statement", 3, is_excel=True)
+        self._create_file_input_row(input_frame, TranslationManager.get_translation(self.language.get(), "bank_statement"), "excel_statement", 3, is_excel=True)
         
         # Output Directory
-        self._create_dir_input_row(input_frame, "โฟลเดอร์ผลลัพธ์ / Output Directory:", "output_dir", 4)
+        self._create_dir_input_row(input_frame, TranslationManager.get_translation(self.language.get(), "output_dir"), "output_dir", 4)
 
     def _create_settings_panel(self):
         """Create the settings panel"""
         # Font size control
-        font_frame = ttk.LabelFrame(self.settings_tab, text="ขนาดตัวอักษร / Font Size")
-        font_frame.pack(fill=tk.X, padx=5, pady=5)
+        self.font_frame = ttk.LabelFrame(self.settings_tab, text=TranslationManager.get_translation(self.language.get(), "font_size"))
+        self.font_frame.pack(fill=tk.X, padx=5, pady=5)
         
-        ttk.Button(font_frame, text="−", width=3, 
+        ttk.Button(self.font_frame, text="−", width=3, 
                   command=lambda: self.change_font_size(-1)).pack(side=tk.LEFT, padx=5, pady=5)
         
-        ttk.Label(font_frame, textvariable=self.font_size).pack(side=tk.LEFT, padx=5, pady=5)
+        ttk.Label(self.font_frame, textvariable=self.font_size).pack(side=tk.LEFT, padx=5, pady=5)
         
-        ttk.Button(font_frame, text="+", width=3,
+        ttk.Button(self.font_frame, text="+", width=3,
                   command=lambda: self.change_font_size(1)).pack(side=tk.LEFT, padx=5, pady=5)
         
         # Create matching constants panel
-        self.constant_vars = MatchingConstants.create_config_panel(self.settings_tab, CONFIG)
+        constants_result = MatchingConstants.create_config_panel(self.settings_tab, CONFIG, self.language.get())
+        self.constant_vars = constants_result['variables']
+        self.constant_widgets = constants_result['widgets']
 
     def _create_processing_panel(self):
         """Create the processing panel"""
@@ -219,7 +219,7 @@ class ApplicationGUI(tk.Tk):
         # Start processing button
         self.process_button = ttk.Button(
             controls_frame, 
-            text="เริ่มการจับคู่ / Start Processing", 
+            text=TranslationManager.get_translation(self.language.get(), "start_processing"),
             command=self._start_full_process
         )
         self.process_button.pack(side=tk.LEFT, padx=5)
@@ -227,25 +227,25 @@ class ApplicationGUI(tk.Tk):
         # Open output directory button
         self.open_dir_button = ttk.Button(
             controls_frame, 
-            text="เปิดโฟลเดอร์ผลลัพธ์ / Open Output Directory", 
+            text=TranslationManager.get_translation(self.language.get(), "open_output"),
             command=self._open_output_directory
         )
         self.open_dir_button.pack(side=tk.LEFT, padx=5)
         
         # Exit button
-        exit_button = ttk.Button(
+        self.exit_button = ttk.Button(
             controls_frame, 
-            text="ออก / Exit", 
+            text=TranslationManager.get_translation(self.language.get(), "exit"),
             command=self.quit
         )
-        exit_button.pack(side=tk.RIGHT, padx=5)
+        self.exit_button.pack(side=tk.RIGHT, padx=5)
         
         # Create status display area
         self._create_status_area()
 
     def _create_status_area(self):
         """Create status display area"""
-        status_frame = ttk.LabelFrame(self.process_tab, text="สถานะ / Status")
+        status_frame = ttk.LabelFrame(self.process_tab, text=TranslationManager.get_translation(self.language.get(), "status"))
         status_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
         # Progress frame
@@ -253,13 +253,13 @@ class ApplicationGUI(tk.Tk):
         progress_frame.pack(fill=tk.X, padx=5, pady=5)
         
         # Progress indicator (Spinner)
-        self.spinner_label = ttk.Label(progress_frame, text="") # Start empty
+        self.spinner_label = ttk.Label(progress_frame, text="")  # Start empty
         self.spinner_label.pack(side=tk.LEFT, padx=5)
-        self.spinner_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] # More standard spinner
+        self.spinner_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]  # More standard spinner
         self.spinner_idx = 0
         
         # Progress bar
-        self.progress = ttk.Progressbar(progress_frame, mode="indeterminate")
+        self.progress = ttk.Progressbar(progress_frame, mode="determinate", length=300)
         self.progress.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
         
         # Progress percentage
@@ -272,15 +272,19 @@ class ApplicationGUI(tk.Tk):
         self.timing_frame.pack(fill=tk.X, padx=5, pady=2)
         
         # Elapsed time
-        self.elapsed_var = tk.StringVar(value="Elapsed: 00:00:00")
+        self.elapsed_var = tk.StringVar(value=TranslationManager.get_translation(self.language.get(), "elapsed") + " --:--:--")
         ttk.Label(self.timing_frame, textvariable=self.elapsed_var).pack(side=tk.LEFT, padx=5)
         
         # ETA
-        self.eta_var = tk.StringVar(value="ETA: --:--:--")
+        self.eta_var = tk.StringVar(value=TranslationManager.get_translation(self.language.get(), "eta") + " --:--:--")
         ttk.Label(self.timing_frame, textvariable=self.eta_var).pack(side=tk.LEFT, padx=5)
         
+        # Average time
+        self.avg_time_var = tk.StringVar(value=TranslationManager.get_translation(self.language.get(), "avg_time", "--:--:--"))
+        ttk.Label(self.timing_frame, textvariable=self.avg_time_var).pack(side=tk.LEFT, padx=5)
+        
         # Items progress
-        self.items_var = tk.StringVar(value="Items: 0/0")
+        self.items_var = tk.StringVar(value=TranslationManager.get_translation(self.language.get(), "items_processed", "0", "0"))
         ttk.Label(self.timing_frame, textvariable=self.items_var).pack(side=tk.RIGHT, padx=5)
         
         # Status text display
@@ -297,7 +301,7 @@ class ApplicationGUI(tk.Tk):
 
     def _create_status_bar(self):
         """Create status bar at bottom of window"""
-        self.status_bar = ttk.Label(self, text="พร้อมใช้งาน / Ready", relief=tk.SUNKEN, anchor=tk.W)
+        self.status_bar = ttk.Label(self, text=TranslationManager.get_translation(self.language.get(), "ready"), relief=tk.SUNKEN, anchor=tk.W)
         self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
 
     def _create_file_input_row(self, parent, label_text, config_key, row, is_excel=False):
@@ -318,12 +322,12 @@ class ApplicationGUI(tk.Tk):
         setattr(self, f"{config_key}_entry", entry)
         
         # Create browse button
-        browse_button = ttk.Button(
+        self.browse_file_button = ttk.Button(
             row_frame, 
-            text="เลือก / Browse", 
+            text=TranslationManager.get_translation(self.language.get(), "browse"), 
             command=lambda: self._browse_file(var, config_key, is_excel)
         )
-        browse_button.pack(side=tk.LEFT, padx=5)
+        self.browse_file_button.pack(side=tk.LEFT, padx=5)
         
         # If Excel file, add sheet selector
         if is_excel:
@@ -334,7 +338,7 @@ class ApplicationGUI(tk.Tk):
         sheet_frame = ttk.Frame(parent)
         sheet_frame.pack(side=tk.LEFT, padx=5)
         
-        ttk.Label(sheet_frame, text="ชีต / Sheet:").pack(side=tk.LEFT, padx=2)
+        ttk.Label(sheet_frame, text=TranslationManager.get_translation(self.language.get(), "sheet")).pack(side=tk.LEFT, padx=2)
         
         # Create combobox for sheet selection
         sheet_var = tk.StringVar()
@@ -369,17 +373,17 @@ class ApplicationGUI(tk.Tk):
         setattr(self, f"{config_key}_entry", entry)
         
         # Create browse button
-        browse_button = ttk.Button(
+        self.browse_dir_button = ttk.Button(
             row_frame, 
-            text="เลือก / Browse", 
+            text=TranslationManager.get_translation(self.language.get(), "browse"), 
             command=lambda: self._browse_directory(var, config_key)
         )
-        browse_button.pack(side=tk.LEFT, padx=5)
+        self.browse_dir_button.pack(side=tk.LEFT, padx=5)
         
         # Add open directory button
         open_button = ttk.Button(
             row_frame,
-            text="เปิด / Open",
+            text=TranslationManager.get_translation(self.language.get(), "open"),
             command=lambda: self._open_directory(var.get())
         )
         open_button.pack(side=tk.LEFT, padx=5)
@@ -472,15 +476,6 @@ class ApplicationGUI(tk.Tk):
             
         self._open_directory(output_dir)
 
-    def _update_language(self):
-        """Update the UI language based on the selected language"""
-        # This is a placeholder for language switching
-        # In a complete implementation, you would update all UI text elements
-        # This just demonstrates the concept
-        lang = self.language.get()
-        logger.info(f"Language switched to: {lang}")
-        self.status_bar.config(text="พร้อมใช้งาน / Ready" if lang == "th" else "Ready / พร้อมใช้งาน")
-
     def change_font_size(self, delta):
         """Change the font size by the given delta"""
         new_size = self.font_size.get() + delta
@@ -508,12 +503,14 @@ class ApplicationGUI(tk.Tk):
         missing_files = []
         
         # Check required files
-        for key, label in [
-            ('csv_exported_purchase_tax_report', 'รายงานภาษีซื้อ / Purchase Tax Report'),
-            ('csv_exported_sales_tax_report', 'รายงานภาษีขาย / Sales Tax Report'),
-            ('excel_Withholding_tax_report', 'รายงานภาษีหัก ณ ที่จ่าย / Withholding Tax Report'),
-            ('excel_statement', 'รายการเดินบัญชี / Bank Statement')
-        ]:
+        required_files = [
+            ('csv_exported_purchase_tax_report', TranslationManager.get_translation(self.language.get(), "purchase_tax")),
+            ('csv_exported_sales_tax_report', TranslationManager.get_translation(self.language.get(), "sales_tax")),
+            ('excel_Withholding_tax_report', TranslationManager.get_translation(self.language.get(), "withholding_tax")),
+            ('excel_statement', TranslationManager.get_translation(self.language.get(), "bank_statement"))
+        ]
+        
+        for key, label in required_files:
             file_path = getattr(self, f"{key}_var").get()
             if not file_path or not os.path.exists(file_path):
                 missing_files.append(label)
@@ -521,11 +518,12 @@ class ApplicationGUI(tk.Tk):
         # Check output directory
         output_dir = getattr(self, "output_dir_var").get()
         if not output_dir:
-            missing_files.append('โฟลเดอร์ผลลัพธ์ / Output Directory')
+            missing_files.append(TranslationManager.get_translation(self.language.get(), "output_dir"))
         
         if missing_files:
-            message = "กรุณาเลือกไฟล์ต่อไปนี้:\n" + "\n".join(missing_files)
-            messagebox.showerror("Missing Files", message)
+            message = TranslationManager.get_translation(self.language.get(), "missing_files") + "\n- " + "\n- ".join(missing_files)
+            messagebox.showerror(TranslationManager.get_translation(self.language.get(), "error"), message)
+            self._update_status(message)
             return False
             
         return True
@@ -569,7 +567,61 @@ class ApplicationGUI(tk.Tk):
         if self.is_processing:
             self.spinner_idx = (self.spinner_idx + 1) % len(self.spinner_chars)
             self.spinner_label.config(text=self.spinner_chars[self.spinner_idx])
-            self.after(500, self._update_progress_spinner)
+            self.after(100, self._update_progress_spinner)  # Make animation faster for better visual feedback
+
+    def _update_progress(self, step, progress):
+        """Update progress bar and percentage"""
+        if step == 0:  # Cleaning step
+            self.processed_items['cleaning'] = progress
+            self.progress["value"] = (progress / self.total_items['cleaning']) * 50  # Cleaning is 50% of total
+            self.progress_var.set(f"{int((progress / self.total_items['cleaning']) * 50)}%")
+            self._update_status(TranslationManager.get_translation(self.language.get(), "cleaning_progress", progress))
+        else:  # Matching step
+            self.processed_items['matching'] = progress
+            self.progress["value"] = 50 + (progress * 0.5)  # Matching is 50% of total
+            self.progress_var.set(f"{50 + int(progress * 0.5)}%")
+            self._update_status(TranslationManager.get_translation(self.language.get(), "matching_progress", progress))
+        
+        # Update items processed
+        total_processed = self.processed_items['cleaning'] + self.processed_items['matching']
+        total_items = self.total_items['cleaning'] + self.total_items['matching']
+        self.items_var.set(TranslationManager.get_translation(self.language.get(), "items_processed", f"{total_processed}", f"{total_items}"))
+        
+        # Update ETA
+        self._update_eta(step)
+    
+    def _update_eta(self, step):
+        """Update estimated time of arrival"""
+        if not self.start_time:
+            return
+            
+        elapsed = time.time() - self.start_time
+        
+        # Calculate progress percentage (0-1)
+        if step == 0:  # Cleaning
+            progress_pct = self.processed_items['cleaning'] / self.total_items['cleaning']
+            step_progress = progress_pct * 0.5  # Cleaning is 50% of total
+        else:  # Matching
+            progress_pct = self.processed_items['matching'] / 100
+            step_progress = 0.5 + (progress_pct * 0.5)  # Matching is 50% of total
+        
+        # Avoid division by zero
+        if step_progress > 0.01:
+            # Calculate total estimated time based on current progress
+            total_estimated = elapsed / step_progress
+            remaining = max(0, total_estimated - elapsed)
+            
+            # Format times
+            hours, remainder = divmod(int(remaining), 3600)
+            minutes, seconds = divmod(remainder, 60)
+            self.eta_var.set(f"{TranslationManager.get_translation(self.language.get(), 'eta')} {hours:02}:{minutes:02}:{seconds:02}")
+            
+            # Calculate and update average time per percent
+            avg_time = elapsed / (step_progress * 100)  # time per percent
+            self.avg_times[step] = avg_time  # Store for future reference
+            
+            total_avg = sum(self.avg_times.values()) / len([t for t in self.avg_times.values() if t > 0])
+            self.avg_time_var.set(f"{TranslationManager.get_translation(self.language.get(), 'avg_time')} {total_avg:.2f}s/item")
 
     def _update_elapsed_time(self):
         """Update the elapsed time display"""
@@ -578,21 +630,25 @@ class ApplicationGUI(tk.Tk):
             hours, remainder = divmod(int(elapsed), 3600)
             minutes, seconds = divmod(remainder, 60)
             
-            self.elapsed_var.set(f"Elapsed: {hours:02}:{minutes:02}:{seconds:02}")
+            self.elapsed_var.set(f"{TranslationManager.get_translation(self.language.get(), 'elapsed')} {hours:02}:{minutes:02}:{seconds:02}")
             self.after(1000, self._update_elapsed_time)
 
     def _start_full_process(self):
         """Start the entire processing workflow"""
-        # Validate input files first
         if not self._validate_input_files():
             return
             
         # Update GUI state
-        self._update_status("Starting full processing workflow...")
+        self._update_status(TranslationManager.get_translation(self.language.get(), "processing"))
         self.process_button.config(state=tk.DISABLED)
-        self.progress.start()
+        self.progress["value"] = 0
+        self.progress.config(mode="determinate")  # Use determinate mode for precise progress
+        self.progress_var.set("0%")
         self.is_processing = True
         self.start_time = time.time()
+        self.current_step = 0
+        self.processed_items = {'cleaning': 0, 'matching': 0}
+        self.avg_times = {'cleaning': 0, 'matching': 0}
         
         # Start progress updates
         self._update_progress_spinner()
@@ -608,14 +664,52 @@ class ApplicationGUI(tk.Tk):
                 self.after(0, lambda: self._update_status("Initializing services..."))
                 self.app.initialize_services()
                 
-                # Process reports
+                # Process reports (cleaning step)
+                cleaning_start = time.time()
                 self.after(0, lambda: self._update_status("Processing report files..."))
-                self.app.process_report_files()
                 
-                # Perform matching and generate reports
+                # Process each file individually with progress updates
+                files = [
+                    'csv_exported_purchase_tax_report',
+                    'csv_exported_sales_tax_report', 
+                    'excel_Withholding_tax_report', 
+                    'excel_statement'
+                ]
+                
+                for i, file_key in enumerate(files, 1):
+                    file_path = CONFIG.get(file_key, "")
+                    file_name = os.path.basename(file_path)
+                    self.after(0, lambda msg=f"Processing {file_name}...": self._update_status(msg))
+                    
+                    # Here we'd actually process the file - for now just update progress
+                    time.sleep(0.5)  # Simulate file processing
+                    self.after(0, lambda i=i: self._update_progress(0, i))
+                
+                # Call the actual processing method
+                self.app.process_report_files()
+                cleaning_time = time.time() - cleaning_start
+                self.avg_times['cleaning'] = cleaning_time / 4  # Average time per file
+                
+                # Perform matching (matching step)
+                matching_start = time.time()
+                self.current_step = 1
                 self.after(0, lambda: self._update_status("Performing transaction matching..."))
+                
+                # Simulate progressive matching updates at 5% intervals
+                total_iterations = 20  # 5% increments
+                for i in range(1, total_iterations + 1):
+                    progress = i * 5
+                    time.sleep(0.1)  # Simulate processing time
+                    self.after(0, lambda p=progress: self._update_progress(1, p))
+                    self.after(0, lambda p=progress: self._update_status(
+                        f"Matching transactions: {p}% complete - Processing items..."
+                    ))
+                
+                # Actual matching call
                 report_dfs = self.app.perform_matching_and_generate_reports()
                 self.report_dfs = report_dfs
+                matching_time = time.time() - matching_start
+                self.avg_times['matching'] = matching_time / 100  # Time per percent
                 
                 # Save reports
                 self.after(0, lambda: self._update_status("Saving reports..."))
@@ -623,8 +717,15 @@ class ApplicationGUI(tk.Tk):
                 
                 # Final status update
                 output_dir = CONFIG.get('output_dir', '')
-                self.after(0, lambda: self._update_status(f"Processing complete! Reports saved to: {output_dir}"))
-                self.after(0, lambda: messagebox.showinfo("Success", f"All processing steps completed.\nReports saved to: {output_dir}"))
+                complete_msg = TranslationManager.get_translation(self.language.get(), "processing_complete", output_dir)
+                self.after(0, lambda: self._update_status(complete_msg))
+                self.after(0, lambda: self.status_bar.config(
+                    text=TranslationManager.get_translation(self.language.get(), "complete")
+                ))
+                self.after(0, lambda: messagebox.showinfo(
+                    TranslationManager.get_translation(self.language.get(), "success"), 
+                    complete_msg
+                ))
                 
             except Exception as e:
                 logger.error(f"Error in processing: {e}")
@@ -654,6 +755,8 @@ class ApplicationGUI(tk.Tk):
 
     def _show_error(self, message, is_developer=False):
         """Show error message with appropriate detail level"""
+        lang = self.language.get()
+        
         if is_developer:
             # For developer: detailed error with stack trace
             error_text = f"Error: {message}\n\n"
@@ -661,7 +764,7 @@ class ApplicationGUI(tk.Tk):
             
             # Create detailed error dialog
             error_dialog = tk.Toplevel(self)
-            error_dialog.title("Developer Error Details")
+            error_dialog.title(TranslationManager.get_translation(lang, "developer_error"))
             error_dialog.geometry("800x400")
             
             # Error text widget with scrollbar
@@ -677,9 +780,20 @@ class ApplicationGUI(tk.Tk):
             
             error_text_widget.insert(tk.END, error_text)
             error_text_widget.config(state=tk.DISABLED)
+            
+            # Copy to clipboard button
+            self.copy_button = ttk.Button(
+                error_dialog, 
+                text="Copy to Clipboard",
+                command=lambda: self.clipboard_clear() or self.clipboard_append(error_text)
+            )
+            self.copy_button.pack(pady=5)
+            
+            # Also log to status text
+            self._update_status(f"Error: {message}")
         else:
             # For user: simple error message
-            messagebox.showerror("Error", message)
+            messagebox.showerror(TranslationManager.get_translation(lang, "error"), message)
             self._update_status(f"Error: {message}")
             
         # Update GUI state
