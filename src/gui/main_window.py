@@ -81,68 +81,7 @@ class ApplicationGUI(tk.Tk):
         
         logger.info("GUI initialized")
     
-    # language ui
-    # def _update_all_text(self, *args):
-    #     """Update all text elements in the UI based on current language"""
-    #     lang = self.language.get()
-        
-    #     # Update window title
-    #     self.title(TranslationManager.get_translation(lang, "window_title"))
-        
-    #     # Update tab names
-    #     self.notebook.tab(0, text=TranslationManager.get_translation(lang, "files_tab"))
-    #     self.notebook.tab(1, text=TranslationManager.get_translation(lang, "settings_tab"))
-    #     self.notebook.tab(2, text=TranslationManager.get_translation(lang, "process_tab"))
-        
-    #     # Update file input labels
-    #     if hasattr(self, 'files_tab'):
-    #         for widget in self.files_tab.winfo_children():
-    #             if isinstance(widget, ttk.LabelFrame):
-    #                 widget.configure(text=TranslationManager.get_translation(lang, "input_files"))
-                    
-    #     # Update all buttons
-    #     if hasattr(self, 'process_button'):
-    #         self.process_button.config(text=TranslationManager.get_translation(lang, "start_processing"))
-    #     if hasattr(self, 'exit_button'):
-    #         self.exit_button.config(text=TranslationManager.get_translation(lang, "exit"))
-    #     if hasattr(self, 'browse_file_button'):
-    #         self.browse_file_button.config(text=TranslationManager.get_translation(lang, "browse"))
-    #     if hasattr(self, 'open_dir_button'):
-    #         self.open_dir_button.config(text=TranslationManager.get_translation(lang, "open"))
-    #     if hasattr(self, 'reset_button'):
-    #         self.reset_button.config(text=TranslationManager.get_translation(lang, "reset"))
-    #     if hasattr(self, 'copy_button'):
-    #         self.copy_button.config(text=TranslationManager.get_translation(lang, "copy_clipboard"))
-        
-        
-    #     self.font_frame.configure(text=TranslationManager.get_translation(lang, "font_size"))
-        
-    #     # Update matching parameters labels
-    #     if hasattr(self, 'constant_widgets'):
-    #         self.constant_widgets['frame'].configure(text=TranslationManager.get_translation(lang, "matching_params"))
-    #         self.constant_widgets['credit_label'].configure(text=TranslationManager.get_translation(lang, "credit_days"))
-    #         self.constant_widgets['sale_tolerance_label'].configure(text=TranslationManager.get_translation(lang, "sale_tolerance"))
-    #         self.constant_widgets['purchase_tolerance_label'].configure(text=TranslationManager.get_translation(lang, "purchase_tolerance"))
-    #         self.constant_widgets['reset_button'].configure(text=TranslationManager.get_translation(lang, "reset"))
-
-        
-    #     # Update file input fields
-    #     self._update_file_labels(lang)
-        
-    #     # Update status area labels
-    #     if hasattr(self, 'process_tab'):
-    #         for widget in self.process_tab.winfo_children():
-    #             if isinstance(widget, ttk.LabelFrame):
-    #                 widget.configure(text=TranslationManager.get_translation(lang, "status"))
-        
-    #     # Update timing info
-    #     self.elapsed_var.set(TranslationManager.get_translation(lang, "elapsed") + " --:--:--")
-    #     self.eta_var.set(TranslationManager.get_translation(lang, "eta") + " --:--:--")
-    #     self.items_var.set(TranslationManager.get_translation(lang, "items") + " 0/0")
-        
-    #     # Update status bar
-    #     self.status_bar.config(text=TranslationManager.get_translation(lang, "ready"))
-
+    # NOTE - language ui
     def _update_all_text(self, *args):
         """Update all text elements in the UI based on current language"""
         lang = self.language.get()
@@ -182,18 +121,6 @@ class ApplicationGUI(tk.Tk):
         
         # self._update_file_labels(lang)
 
-        # Update matching parameters labels
-        if hasattr(self, 'constant_widgets'):
-            try:
-                logger.info("updating constants by widget instance directly")
-                self.constant_widgets['frame'].configure(text=TranslationManager.get_translation(lang, "matching_params"))
-                self.constant_widgets['credit_label'].configure(text=TranslationManager.get_translation(lang, "matching_credit_days"))
-                self.constant_widgets['sale_tolerance_label'].configure(text=TranslationManager.get_translation(lang, "matching_sale_tolerance"))
-                self.constant_widgets['purchase_tolerance_label'].configure(text=TranslationManager.get_translation(lang, "matching_purchase_tolerance"))
-                self.constant_widgets['reset_button'].configure(text=TranslationManager.get_translation(lang, "reset"))
-            except Exception as e:
-                logger.error(f"Error updating matching parameters labels: {e}")
-        
         # Update status bar
         try:
             self.status_bar.config(text=TranslationManager.get_translation(lang, "ready"))
@@ -204,33 +131,10 @@ class ApplicationGUI(tk.Tk):
         try:
             self.elapsed_var.set(TranslationManager.get_translation(lang, "elapsed") + " --:--:--")
             self.eta_var.set(TranslationManager.get_translation(lang, "eta") + " --:--:--")
+            self.avg_time_var.set(TranslationManager.get_translation(lang, "avg_time") + " --:--:--")
             self.items_var.set(TranslationManager.get_translation(lang, "items") + " 0/0")
         except Exception as e:
             logger.error(f"Error updating timing info variables: {e}")
-
-    def _update_file_labels(self, lang):
-        """Update file input field labels with translated text"""
-        file_labels = [
-            ("csv_exported_purchase_tax_report", "purchase_tax"),
-            ("csv_exported_sales_tax_report", "sales_tax"),
-            ("excel_Withholding_tax_report", "withholding_tax"),
-            ("excel_statement", "bank_statement"),
-            ("output_dir", "output_dir")
-        ]
-        
-        # Find file input frame
-        for widget in self.files_tab.winfo_children():
-            if isinstance(widget, ttk.LabelFrame):
-                for child in widget.winfo_children():
-                    if isinstance(child, ttk.Frame):
-                        for i, (key, label_key) in enumerate(file_labels):
-                            for grandchild in child.winfo_children():
-                                if isinstance(grandchild, ttk.Frame) and grandchild.grid_info().get('row') == i:
-                                    for label in grandchild.winfo_children():
-                                        if isinstance(label, ttk.Label) and not "sheet" in label.cget("text").lower():
-                                            label.configure(text=TranslationManager.get_translation(lang, label_key))
-                                        if isinstance(label, ttk.Label) and "sheet" in label.cget("text").lower():
-                                            label.configure(text=TranslationManager.get_translation(lang, "sheet"))
 
     def _update_language(self):
         """Update the UI language based on the selected language"""
@@ -238,43 +142,10 @@ class ApplicationGUI(tk.Tk):
         logger.info(f"Language switched to: {lang}")
         self._update_all_text()
 
-    # panels ui
-    # def _create_file_inputs_panel(self):
-    #     """Create the file input section"""
-    #     file_frame = ttk.LabelFrame(self.files_tab, text=TranslationManager.get_translation(self.language.get(), "input_files"))
-    #     file_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        
-    #     # Language toggle
-    #     lang_frame = ttk.Frame(file_frame)
-    #     lang_frame.pack(fill=tk.X, padx=5, pady=5)
-        
-    #     ttk.Label(lang_frame, text=TranslationManager.get_translation(self.language.get(), "language")).pack(side=tk.LEFT, padx=5)
-    #     ttk.Radiobutton(lang_frame, text=TranslationManager.get_translation(self.language.get(), "thai"), variable=self.language, value="th", 
-    #                     command=self._update_language).pack(side=tk.LEFT, padx=5)
-    #     ttk.Radiobutton(lang_frame, text=TranslationManager.get_translation(self.language.get(), "english"), variable=self.language, value="en", 
-    #                     command=self._update_language).pack(side=tk.LEFT, padx=5)
-        
-    #     # File input container
-    #     input_frame = ttk.Frame(file_frame)
-    #     input_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        
-    #     # Purchase Tax Report
-    #     self._create_file_input_row(input_frame, TranslationManager.get_translation(self.language.get(), "purchase_tax"), "csv_exported_purchase_tax_report", 0)
-        
-    #     # Sales Tax Report
-    #     self._create_file_input_row(input_frame, TranslationManager.get_translation(self.language.get(), "sales_tax"), "csv_exported_sales_tax_report", 1)
-        
-    #     # Withholding Tax Report
-    #     self._create_file_input_row(input_frame, TranslationManager.get_translation(self.language.get(), "withholding_tax"), "excel_Withholding_tax_report", 2, is_excel=True)
-        
-    #     # Bank Statement
-    #     self._create_file_input_row(input_frame, TranslationManager.get_translation(self.language.get(), "bank_statement"), "excel_statement", 3, is_excel=True)
-        
-    #     # Output Directory
-    #     self._create_dir_input_row(input_frame, TranslationManager.get_translation(self.language.get(), "output_dir"), "output_dir", 4)
-    
+    # NOTE - 3 panels ui
     def _create_file_inputs_panel(self):
         """Create the file input section"""
+
         file_frame = ttk.LabelFrame(self.files_tab, text=TranslationManager.get_translation(self.language.get(), "input_files"))
         self._register_widget(file_frame, 'frames', 'input_files')
         file_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
@@ -316,7 +187,6 @@ class ApplicationGUI(tk.Tk):
         # Output Directory
         self._create_dir_input_row(input_frame, "output_dir", "output_dir", 4)
         
-
     def _create_settings_panel(self):
         """Create the settings panel"""
         # Font size control
@@ -336,6 +206,22 @@ class ApplicationGUI(tk.Tk):
         constants_result = MatchingConstants.create_config_panel(self.settings_tab, CONFIG, self.language.get())
         self.constant_vars = constants_result['variables']
         self.constant_widgets = constants_result['widgets']
+        
+        # Register each widget from constants_result with appropriate type and key
+        for widget_key, widget in constants_result['widgets'].items():
+            if widget is None:
+                continue
+                
+            if widget_key == 'frame':
+                self._register_widget(widget, 'frames', 'matching_params')
+            elif widget_key == 'credit_label':
+                self._register_widget(widget, 'labels', 'matching_credit_days')
+            elif widget_key == 'sale_tolerance_label':
+                self._register_widget(widget, 'labels', 'matching_sale_tolerance')
+            elif widget_key == 'purchase_tolerance_label':
+                self._register_widget(widget, 'labels', 'matching_purchase_tolerance')
+            elif widget_key == 'reset_button':
+                self._register_widget(widget, 'buttons', 'reset')
 
     def _create_processing_panel(self):
         """Create the processing panel"""
@@ -372,15 +258,16 @@ class ApplicationGUI(tk.Tk):
         # Create status display area
         self._create_status_area()
 
-    def _register_widget(self, widget, widget_type, key, default_text="", instance_id=None):
+    # NOTE - all widgets
+    def _register_widget(self, widget, widget_type, key, instance_id=None, default_text=""):
         """Register a widget for language updates
         
         Args:
             widget: The widget instance
             widget_type: Type of widget ('labels', 'buttons', 'frames', 'tabs')
             key: Translation key
-            default_text: Default text if translation is not found
             instance_id: Optional unique identifier for this widget instance
+            default_text: Default text if translation is not found
         """
         if widget_type not in self.widgets:
             self.widgets[widget_type] = {}
@@ -398,12 +285,13 @@ class ApplicationGUI(tk.Tk):
         
         return widget
 
-    # file input widgets
+    # NOTE - file input widgets
     def _create_file_input_row(self, parent, translation_key, config_key, row, is_excel=False):
         """Create a row with label, entry field and browse button for file selection"""
         row_frame = ttk.Frame(parent)
         row_frame.grid(row=row, column=0, sticky="ew", padx=5, pady=5)
         parent.columnconfigure(0, weight=1)
+        logger.debug(f"Creating file input row for '{translation_key}'+'{config_key}' at row {row}")
         
         input_label = ttk.Label(row_frame, text=TranslationManager.get_translation(self.language.get(), translation_key))
         self._register_widget(input_label, 'labels', translation_key, config_key)
@@ -610,7 +498,7 @@ class ApplicationGUI(tk.Tk):
             
         return True
 
-    # settings widgets
+    # NOTE - settings widgets
     def change_font_size(self, delta):
         """Change the font size by the given delta"""
         new_size = self.font_size.get() + delta
@@ -656,7 +544,7 @@ class ApplicationGUI(tk.Tk):
         for key, var in self.constant_vars.items():
             CONFIG[key] = var.get()
 
-    # processing widgets
+    # NOTE - processing widgets
     def _create_status_area(self):
         """Create status display area"""
         status_frame = ttk.LabelFrame(self.process_tab, text=TranslationManager.get_translation(self.language.get(), "status"))
@@ -976,6 +864,7 @@ class ApplicationGUI(tk.Tk):
             self.elapsed_var.set(f"Total time: {hours:02}:{minutes:02}:{seconds:02}")
             self.eta_var.set("Complete")
 
+    # NOTE - show error box
     def _show_error(self, message, is_developer=False):
         """Show error message with appropriate detail level"""
         lang = self.language.get()
