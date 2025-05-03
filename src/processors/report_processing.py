@@ -72,7 +72,7 @@ class ReportProcess:
             logger.debug(f"Report names: {json.dumps(self.report_name, ensure_ascii=False, indent=4)}")
 
             self._initialized = True
-            self.statement_lenght = 0
+            self.statement_length = 0
             logger.info("ReportProcess initialized successfully")
         except AttributeError as e:
             logger.error(f"Invalid reports_path structure: {e}")
@@ -452,8 +452,8 @@ class ReportProcess:
             # 3. formatting values if needs
             # 4. fill missing values, columns(headers)
             
-            self.statement_lenght = len(df)
-            logger.debug(f"Statement length: {self.statement_lenght}")
+            self.statement_length = len(df)
+            logger.debug(f"Statement length: {self.statement_length}")
             logger.info("Statement processed successfully")
             return df
             
