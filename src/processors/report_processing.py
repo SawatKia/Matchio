@@ -154,11 +154,14 @@ class ReportProcess:
     
     @staticmethod
     def _log_dataframe_sample(df: pd.DataFrame, rows: int = 5):
-        buffer = io.StringIO()
-        df.info(buf=buffer)
-        info_str = buffer.getvalue()
-        logger.debug(f"Dataframe info:\n{info_str}")
-        logger.debug(f"Dataframe first {rows} rows: \n{tabulate(df.head(rows), headers='keys', tablefmt='simple_outline', disable_numparse=True)}")
+        try:
+            buffer = io.StringIO()
+            df.info(buf=buffer)
+            info_str = buffer.getvalue()
+            logger.debug(f"Dataframe info:\n{info_str}")
+            logger.debug(f"Dataframe first {rows} rows: \n{tabulate(df.head(rows), headers='keys', tablefmt='simple_outline', disable_numparse=True)}")
+        except Exception as e:
+            logger.warning(f"Error logging dataframe sample: {e}")
 
     def _calculate_new_columns(self, df: pd.DataFrame, report_name: str, columns: List[str]) -> pd.DataFrame:
         try:

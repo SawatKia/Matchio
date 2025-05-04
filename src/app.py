@@ -86,7 +86,7 @@ class Application:
 
         return result
 
-    def process_sale_reports(self) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
+    def process_sale_reports(self, progress_callback) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
         """Process both the sale tax and withholding tax reports."""
         logger.info(f"\033[1;36mProcessing sale reports...\033[0m")
 
@@ -113,6 +113,7 @@ class Application:
         except Exception as e:
             logger.error(f"Error processing sale tax report: {e}", exc_info=True)
         finally:
+            progress_callback("sale", 2, 4)
             logger.info("=" * 100)
 
         try:
@@ -135,6 +136,7 @@ class Application:
         except Exception as e:
             logger.error(f"Error processing withholding tax report: {e}", exc_info=True)
         finally:
+            progress_callback("withholding", 3, 4)
             logger.info("=" * 100)
 
         return (sale_df, withholding_df)
@@ -170,12 +172,11 @@ class Application:
     def process_report_files(self, progress_callback=None) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[pd.DataFrame]]:
         """Process all report files."""
         logger.info(f"Starting overall report processing...")
-        progress_callback("purchase", 1, 4)
         self.purchase_df = self.process_purchase_report()
-        progress_callback("sale", 3, 4)
-        self.sale_df, self.withholding_df = self.process_sale_reports()
-        progress_callback("statement", 4, 4)
+        progress_callback("purchase", 1, 4)
+        self.sale_df, self.withholding_df = self.process_sale_reports(progress_callback)
         self.statement_df = self.process_statements()
+        progress_callback("statement", 4, 4)
 
         # Log each DataFrame name first, then its info
         logger.debug("purchase_df:")

@@ -18,7 +18,13 @@ logger = get_logger()
 class ApplicationGUI(tk.Tk):
     def __init__(self, app_instance=None):
         super().__init__()
-        
+
+        try:
+            icon_path = Path(__file__).parent.parent.parent / "icon" / "finished-icon.ico"
+            self.iconbitmap(icon_path)
+        except Exception as e:
+            logger.warning(f"Could not load application icon: {e}")
+
         self.app = app_instance
         self.report_dfs = None
         self.processing_thread = None
@@ -739,7 +745,7 @@ class ApplicationGUI(tk.Tk):
         self._update_status(TranslationManager.get_translation(self.language.get(), "start_processing"))
         self.process_button.config(state=tk.DISABLED)
         self.progress["value"] = 0
-        self.progress.config(mode="determinate")  # Use determinate mode for precise progress
+        self.progress.config(mode="determinate")
         self.progress_var.set("0%")
         self.is_processing = True
         self.start_time = time.time()
@@ -764,21 +770,19 @@ class ApplicationGUI(tk.Tk):
                 self.after(0, lambda: self._update_status(
                     TranslationManager.get_translation(self.language.get(), "initializing_services")
                 ))
-                self.app.initialize_services()
                 
-                # Process reports (cleaning step) 
+                # Handle potential initialization errors
+                try:
+                    self.app.initialize_services()
+                except Exception as e:
+                    logger.error(f"Error initializing services: {e}")
+                    raise RuntimeError(f"Failed to initialize services: {str(e)}")
+                
+                # Process reports (cleaning step)
                 cleaning_start = time.time()
                 self.after(0, lambda: self._update_status(
                     TranslationManager.get_translation(self.language.get(), "cleaning")
                 ))
-                
-                # Process each file individually with progress updates
-                files = [
-                    'csv_exported_purchase_tax_report',
-                    'csv_exported_sales_tax_report', 
-                    'excel_Withholding_tax_report', 
-                    'excel_statement'
-                ]
                 
                 def file_processing_callback(file_type, current, total):
                     file_names = {
@@ -788,40 +792,40 @@ class ApplicationGUI(tk.Tk):
                         "statement": os.path.basename(CONFIG.get('excel_statement', ""))
                     }
                     file_name = file_names.get(file_type, "file")
-                    self.after(0, lambda msg=TranslationManager.get_translation(self.language.get(), "cleaning_files", file_name, current, total): self._update_status(msg))
+                    self.after(0, lambda msg=TranslationManager.get_translation(
+                        self.language.get(), "cleaning_files", file_name, current, total
+                    ): self._update_status(msg))
                     self.after(0, lambda i=current: self._update_progress(0, i))
                 
-                # Call process_report_files with the callback
-                self.app.process_report_files(progress_callback=file_processing_callback)
-                cleaning_time = time.time() - cleaning_start
-                self.avg_times['cleaning'] = cleaning_time / 4  # Average time per file
+                # Safely process report files
+                try:
+                    self.app.process_report_files(progress_callback=file_processing_callback)
+                    cleaning_time = time.time() - cleaning_start
+                    self.avg_times['cleaning'] = cleaning_time / 4
+                except Exception as e:
+                    logger.error(f"Error processing report files: {e}")
+                    raise RuntimeError(f"Failed to process report files: {str(e)}")
                 
-                # Get the actual statement length after processing
-                if self.app and self.app.report_processor:
-                    statement_length = self.app.report_processor.statement_length
-                    if statement_length > 0:
-                        self.total_items['matching'] = statement_length
-                        self.after(0, lambda: self._update_status(
-                            TranslationManager.get_translation(
-                                self.language.get(),
-                                "statement_items_found",
-                                str(statement_length)
-                            )
-                        ))
-                        logger.debug(f"Retrieved statement length: {statement_length}")
-                    else:
-                        self.total_items['matching'] = 500  # Default fallback
-                        self.after(0, lambda: self._update_status(
-                            TranslationManager.get_translation(
-                                self.language.get(),
-                                "statement_length_warning"
-                            )
-                        ))
-                        logger.warning(f"Could not determine statement length, using default")
-                else:
-                    self.total_items['matching'] = 500  # Default fallback
-                    logger.warning("No report processor found, using default statement length")
-
+                # Safely get statement length
+                try:
+                    statement_length = 500  # Default fallback
+                    if self.app and self.app.report_processor:
+                        if hasattr(self.app.report_processor, 'statement_length'):
+                            statement_length = self.app.report_processor.statement_length or 500
+                    
+                    self.total_items['matching'] = statement_length
+                    self.after(0, lambda: self._update_status(
+                        TranslationManager.get_translation(
+                            self.language.get(),
+                            "statement_items_found" if statement_length != 500 else "statement_length_warning",
+                            str(statement_length)
+                        )
+                    ))
+                    logger.debug(f"Using statement length: {statement_length}")
+                except Exception as e:
+                    logger.warning(f"Error getting statement length: {e}, using default")
+                    self.total_items['matching'] = 500
+                
                 # Perform matching (matching step)
                 matching_start = time.time()
                 self.current_step = 1
@@ -845,22 +849,33 @@ class ApplicationGUI(tk.Tk):
                         )
                     ))
                 
-                # Call matching with progress callback
-                report_dfs = self.app.perform_matching_and_generate_reports(
-                    progress_callback=progress_callback
-                )
-                self.report_dfs = report_dfs
-                matching_time = time.time() - matching_start
-                self.avg_times['matching'] = matching_time / 100  # Time per percent
-                
-                # Save reports
-                self.after(0, lambda: self._update_status(
-                    TranslationManager.get_translation(
-                        self.language.get(),
-                        "saving_reports"
+                # Safely perform matching and generate reports
+                try:
+                    report_dfs = self.app.perform_matching_and_generate_reports(
+                        progress_callback=progress_callback
                     )
-                ))
-                self.app.save_reports(report_dfs)
+                    if not report_dfs:
+                        raise RuntimeError("No report data generated")
+                        
+                    self.report_dfs = report_dfs
+                    matching_time = time.time() - matching_start
+                    self.avg_times['matching'] = matching_time / 100
+                except Exception as e:
+                    logger.error(f"Error in matching process: {e}")
+                    raise RuntimeError(f"Failed during matching process: {str(e)}")
+                
+                # Safely save reports
+                try:
+                    self.after(0, lambda: self._update_status(
+                        TranslationManager.get_translation(
+                            self.language.get(),
+                            "saving_reports"
+                        )
+                    ))
+                    self.app.save_reports(report_dfs)
+                except Exception as e:
+                    logger.error(f"Error saving reports: {e}")
+                    raise RuntimeError(f"Failed to save reports: {str(e)}")
                 
                 # Final status update
                 output_dir = CONFIG.get('output_dir', '')
@@ -876,12 +891,12 @@ class ApplicationGUI(tk.Tk):
                 
             except Exception as e:
                 logger.error(f"Error in processing: {e}")
-                self.after(0, lambda: self._show_error(f"Error during processing: {str(e)}", is_developer=True))
+                self.after(0, lambda: self._show_error(str(e), is_developer=True))
                 
             finally:
                 # Update GUI on completion
                 self.after(0, self._process_complete)
-                
+        
         # Start the thread
         self.processing_thread = threading.Thread(target=process_thread, daemon=True)
         self.processing_thread.start()
