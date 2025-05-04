@@ -2,7 +2,7 @@
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
-from typing import Dict, List, Tuple, Set, Optional
+from typing import Dict, List, Tuple, Set, Optional, Callable
 import logging
 from pathlib import Path
 import os
@@ -33,7 +33,8 @@ class TransactionMatcher:
                  max_credit_days: int = 30,
                  sale_tolerance: float = 1000.0,
                  purchase_tolerance: float = 50.0,
-                 expected_column_mappings: Dict = None) -> None:
+                 expected_column_mappings: Dict = None,
+                 progress_callback: Callable[[int, int], None] = None) -> None:
         """
         Initialize the transaction matcher
 
@@ -46,6 +47,7 @@ class TransactionMatcher:
             sale_tolerance: Maximum allowed difference in sale transaction amounts
             purchase_tolerance: Maximum allowed difference in purchase transaction amounts
             expected_column_mappings: Dictionary containing column mappings for report generation
+            progress_callback: Optional callback function(current, total) to report progress
         """
         # Create copies to avoid modifying the original dataframes passed in
         self.statement_df = statement_df.copy() if statement_df is not None else pd.DataFrame()
@@ -71,6 +73,7 @@ class TransactionMatcher:
         self.total_statement_entries = 0
         self.matched_statement_entries = 0
         self.unmatched_statement_entries = 0
+        self.processed_entries = 0
 
         # Keep original index to ensure reports maintain original order if needed before sorting
         self.statement_df['original_index'] = self.statement_df.index
@@ -78,6 +81,7 @@ class TransactionMatcher:
         self.purchase_df['original_index'] = self.purchase_df.index
         self.withholding_df['original_index'] = self.withholding_df.index
 
+        self.progress_callback = progress_callback
         # Prepare data - handle potential errors
         try:
             self._prepare_data()
@@ -614,6 +618,8 @@ class TransactionMatcher:
         if self.sale_df.empty and self.purchase_df.empty and self.withholding_df.empty:
              logger.warning("All invoice/tax dataframes are empty. Skipping matching.")
              return
+        
+        self.total_statement_entries = len(self.statement_df)
 
         # Iterate through statement entries
         # We process in order of statement date, which was sorted in _prepare_data
@@ -635,8 +641,11 @@ class TransactionMatcher:
             except Exception as e:
                 logger.error(f"Error processing statement entry at index {idx}: {e}")
                 # Decide if to continue or stop on error. Continuing for robustness.
+            finally:
+                self.processed_entries += 1
+                if self.progress_callback:
+                    self.progress_callback(self.processed_entries, self.total_statement_entries)
 
-        self.total_statement_entries = len(self.statement_df)
         self.unmatched_statement_entries = self.total_statement_entries - self.matched_statement_entries
 
         logger.info(f"Transaction matching completed.")

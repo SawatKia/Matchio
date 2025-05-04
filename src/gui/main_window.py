@@ -608,8 +608,9 @@ class ApplicationGUI(tk.Tk):
 
     def _update_status(self, message):
         """Update the status text area with a new message"""
+        current_time = time.strftime("%H:%M:%S")  # Get current time in HH:MM:SS format
         self.status_text.config(state=tk.NORMAL)
-        self.status_text.insert(tk.END, f"{message}\n")
+        self.status_text.insert(tk.END, f"[{current_time}] {message}\n")
         self.status_text.see(tk.END)  # Auto-scroll to the end
         self.status_text.config(state=tk.DISABLED)
         self.update_idletasks()  # Force GUI update
@@ -626,33 +627,40 @@ class ApplicationGUI(tk.Tk):
 
     # properly handle statement items
     def _update_progress(self, step, progress):
-        """Update progress bar and percentage"""
+        """
+        Update progress bar and percentage
+        
+        Args:
+            step (int): 0 for cleaning, 1 for matching
+            progress (int): Number of items processed in this step
+        """
         if step == 0:  # Cleaning step
             self.processed_items['cleaning'] = progress
-            self.progress["value"] = (progress / self.total_items['cleaning']) * 50  # Cleaning is 50% of total
-            self.progress_var.set(f"{int((progress / self.total_items['cleaning']) * 50)}%")
-            self._update_status(TranslationManager.get_translation(self.language.get(), "cleaning_progress", progress))
+            progress_percent = float((progress / self.total_items['cleaning']) * 50)
+            self.progress["value"] = progress_percent  # Cleaning is 50% of total
+            self.progress_var.set(f"{progress_percent}%")
         else:  # Matching step
             self.processed_items['matching'] = progress
             
             # Calculate matching progress as percentage of total matching items
             if self.total_items['matching'] > 0:
-                matching_percent = (progress / self.total_items['matching']) * 100
-                progress_value = 50 + (matching_percent * 0.5)  # Matching is 50% of total
+                matching_percent = float((progress / self.total_items['matching']) * 100)
+                progress_value = float(50 + (matching_percent * 0.5))  # Matching is 50% of total
                 self.progress["value"] = progress_value
                 self.progress_var.set(f"{int(progress_value)}%")
+                
             else:
                 # Fallback if total_items['matching'] is 0
                 progress_value = 50 + (progress * 0.5)  # Use progress directly as percentage
                 self.progress["value"] = progress_value
                 self.progress_var.set(f"{int(progress_value)}%")
+                
+                self._update_status(TranslationManager.get_translation(
+                    self.language.get(), 
+                    "matching_progress", 
+                    f"{int(progress_value)}"
+                ))
             
-            self._update_status(TranslationManager.get_translation(
-                self.language.get(), 
-                "matching_progress", 
-                f"{progress}/{self.total_items['matching']}"
-            ))
-        
         # Update items processed
         total_processed = self.processed_items['cleaning'] + self.processed_items['matching']
         total_items = self.total_items['cleaning'] + self.total_items['matching']
@@ -728,7 +736,7 @@ class ApplicationGUI(tk.Tk):
             return
         
         # Update GUI state
-        self._update_status(TranslationManager.get_translation(self.language.get(), "processing"))
+        self._update_status(TranslationManager.get_translation(self.language.get(), "start_processing"))
         self.process_button.config(state=tk.DISABLED)
         self.progress["value"] = 0
         self.progress.config(mode="determinate")  # Use determinate mode for precise progress
@@ -753,12 +761,16 @@ class ApplicationGUI(tk.Tk):
                 self._update_config_from_gui()
                 
                 # Initialize services
-                self.after(0, lambda: self._update_status("Initializing services..."))
+                self.after(0, lambda: self._update_status(
+                    TranslationManager.get_translation(self.language.get(), "initializing_services")
+                ))
                 self.app.initialize_services()
                 
-                # Process reports (cleaning step)
+                # Process reports (cleaning step) 
                 cleaning_start = time.time()
-                self.after(0, lambda: self._update_status("Processing report files..."))
+                self.after(0, lambda: self._update_status(
+                    TranslationManager.get_translation(self.language.get(), "cleaning")
+                ))
                 
                 # Process each file individually with progress updates
                 files = [
@@ -768,33 +780,42 @@ class ApplicationGUI(tk.Tk):
                     'excel_statement'
                 ]
                 
-                for i, file_key in enumerate(files, 1):
-                    file_path = CONFIG.get(file_key, "")
-                    file_name = os.path.basename(file_path)
-                    self.after(0, lambda msg=f"Processing {file_name}...": self._update_status(msg))
-                    #FIXME - to actually process each df individually
-                    # Here we'd actually process the file - for now just update progress
-                    time.sleep(0.5)  # Simulate file processing
-                    self.after(0, lambda i=i: self._update_progress(0, i))
+                def file_processing_callback(file_type, current, total):
+                    file_names = {
+                        "purchase": os.path.basename(CONFIG.get('csv_exported_purchase_tax_report', "")),
+                        "sale": os.path.basename(CONFIG.get('csv_exported_sales_tax_report', "")),
+                        "withholding": os.path.basename(CONFIG.get('excel_Withholding_tax_report', "")),
+                        "statement": os.path.basename(CONFIG.get('excel_statement', ""))
+                    }
+                    file_name = file_names.get(file_type, "file")
+                    self.after(0, lambda msg=TranslationManager.get_translation(self.language.get(), "cleaning_files", file_name, current, total): self._update_status(msg))
+                    self.after(0, lambda i=current: self._update_progress(0, i))
                 
-                # Call the actual processing method
-                self.app.process_report_files()
+                # Call process_report_files with the callback
+                self.app.process_report_files(progress_callback=file_processing_callback)
                 cleaning_time = time.time() - cleaning_start
                 self.avg_times['cleaning'] = cleaning_time / 4  # Average time per file
                 
-                 # Get the actual statement length after processing
+                # Get the actual statement length after processing
                 if self.app and self.app.report_processor:
                     statement_length = self.app.report_processor.statement_length
                     if statement_length > 0:
                         self.total_items['matching'] = statement_length
                         self.after(0, lambda: self._update_status(
-                            f"Statement contains {statement_length} items to match"
+                            TranslationManager.get_translation(
+                                self.language.get(),
+                                "statement_items_found",
+                                str(statement_length)
+                            )
                         ))
                         logger.debug(f"Retrieved statement length: {statement_length}")
                     else:
                         self.total_items['matching'] = 500  # Default fallback
                         self.after(0, lambda: self._update_status(
-                            "Warning: Could not determine statement length, using default"
+                            TranslationManager.get_translation(
+                                self.language.get(),
+                                "statement_length_warning"
+                            )
                         ))
                         logger.warning(f"Could not determine statement length, using default")
                 else:
@@ -804,26 +825,41 @@ class ApplicationGUI(tk.Tk):
                 # Perform matching (matching step)
                 matching_start = time.time()
                 self.current_step = 1
-                self.after(0, lambda: self._update_status("Performing transaction matching..."))
+                self.after(0, lambda: self._update_status(
+                    TranslationManager.get_translation(
+                        self.language.get(),
+                        "performing_matching"
+                    )
+                ))
                 
-                # Simulate progressive matching updates at 5% intervals
-                total_iterations = 20  # 5% increments
-                for i in range(1, total_iterations + 1):
-                    progress = i * 5
-                    time.sleep(0.1)  # Simulate processing time
-                    self.after(0, lambda p=progress: self._update_progress(1, p))
-                    self.after(0, lambda p=progress: self._update_status(
-                        f"Matching transactions: {p}% complete - Processing items..."
+                def progress_callback(current, total):
+                    progress = float((current / total) * 100)
+                    self.after(0, lambda: self._update_progress(2, current))
+                    self.after(0, lambda: self._update_status(
+                        TranslationManager.get_translation(
+                            self.language.get(),
+                            "matching_details",
+                            progress,
+                            current,
+                            total
+                        )
                     ))
                 
-                # Actual matching call
-                report_dfs = self.app.perform_matching_and_generate_reports()
+                # Call matching with progress callback
+                report_dfs = self.app.perform_matching_and_generate_reports(
+                    progress_callback=progress_callback
+                )
                 self.report_dfs = report_dfs
                 matching_time = time.time() - matching_start
                 self.avg_times['matching'] = matching_time / 100  # Time per percent
                 
                 # Save reports
-                self.after(0, lambda: self._update_status("Saving reports..."))
+                self.after(0, lambda: self._update_status(
+                    TranslationManager.get_translation(
+                        self.language.get(),
+                        "saving_reports"
+                    )
+                ))
                 self.app.save_reports(report_dfs)
                 
                 # Final status update

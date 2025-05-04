@@ -167,11 +167,14 @@ class Application:
 
         return result
 
-    def process_report_files(self) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[pd.DataFrame]]:
+    def process_report_files(self, progress_callback=None) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[pd.DataFrame]]:
         """Process all report files."""
         logger.info(f"Starting overall report processing...")
+        progress_callback("purchase", 1, 4)
         self.purchase_df = self.process_purchase_report()
+        progress_callback("sale", 3, 4)
         self.sale_df, self.withholding_df = self.process_sale_reports()
+        progress_callback("statement", 4, 4)
         self.statement_df = self.process_statements()
 
         # Log each DataFrame name first, then its info
@@ -204,10 +207,13 @@ class Application:
 
         return (self.purchase_df, self.sale_df, self.withholding_df, self.statement_df)
 
-    def perform_matching_and_generate_reports(self) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[pd.DataFrame]]:
+    def perform_matching_and_generate_reports(self, progress_callback = None) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[pd.DataFrame]]:
         """
         Performs transaction matching and generates match status reports.
         
+        Args:
+            progress_callback: Optional callback function(current, total) for progress updates
+
         Returns:
             A tuple containing the generated report DataFrames:
             (transaction_match_report_df, sale_match_report_df, purchase_match_report_df, withholding_match_report_df)
@@ -240,7 +246,8 @@ class Application:
                 max_credit_days=CONFIG.get('matching_credit_days', 30),
                 sale_tolerance=CONFIG.get('matching_sale_tolerance', 1000.0),
                 purchase_tolerance=CONFIG.get('matching_purchase_tolerance', 50.0),
-                expected_column_mappings=EXPECTED_COLUMN_MAPPINGS # Pass mappings for report generation
+                expected_column_mappings=EXPECTED_COLUMN_MAPPINGS, # Pass mappings for report generation
+                progress_callback=progress_callback # Pass the progress callback function
             )
 
             # Perform matching
