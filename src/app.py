@@ -1,9 +1,8 @@
 # src\app.py
 import pandas as pd
 from pathlib import Path
-from typing import Optional, Tuple, Dict
+from typing import Optional, Tuple
 import time
-import os
 
 from utils import initialize_logging, get_logger, FileManager, CONFIG, EXPECTED_COLUMN_MAPPINGS
 from processors import ReportProcess, Reports, TransactionMatcher 
@@ -113,7 +112,8 @@ class Application:
         except Exception as e:
             logger.error(f"Error processing sale tax report: {e}", exc_info=True)
         finally:
-            progress_callback("sale", 2, 4)
+            if progress_callback:
+                progress_callback("sale", 2, 4)
             logger.info("=" * 100)
 
         try:
@@ -136,7 +136,8 @@ class Application:
         except Exception as e:
             logger.error(f"Error processing withholding tax report: {e}", exc_info=True)
         finally:
-            progress_callback("withholding", 3, 4)
+            if progress_callback:
+                progress_callback("withholding", 3, 4)
             logger.info("=" * 100)
 
         return (sale_df, withholding_df)
@@ -173,10 +174,12 @@ class Application:
         """Process all report files."""
         logger.info(f"Starting overall report processing...")
         self.purchase_df = self.process_purchase_report()
-        progress_callback("purchase", 1, 4)
+        if progress_callback:
+            progress_callback("purchase", 1, 4)
         self.sale_df, self.withholding_df = self.process_sale_reports(progress_callback)
         self.statement_df = self.process_statements()
-        progress_callback("statement", 4, 4)
+        if progress_callback:
+            progress_callback("statement", 4, 4)
 
         # Log each DataFrame name first, then its info
         logger.debug("purchase_df:")
@@ -208,7 +211,7 @@ class Application:
 
         return (self.purchase_df, self.sale_df, self.withholding_df, self.statement_df)
 
-    def perform_matching_and_generate_reports(self, progress_callback = None) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[pd.DataFrame]]:
+    def perform_matching(self, progress_callback = None) -> None:
         """
         Performs transaction matching and generates match status reports.
         
@@ -221,11 +224,6 @@ class Application:
         """
         logger.info("\033[1;36mStarting matching and report generation...\033[0m")
         match_start_time = time.time()
-
-        transaction_match_report_df = None
-        sale_match_report_df = None
-        purchase_match_report_df = None
-        withholding_match_report_df = None
 
         try:
             # Check if essential data is available
@@ -248,19 +246,12 @@ class Application:
                 sale_tolerance=CONFIG.get('matching_sale_tolerance', 1000.0),
                 purchase_tolerance=CONFIG.get('matching_purchase_tolerance', 50.0),
                 expected_column_mappings=EXPECTED_COLUMN_MAPPINGS, # Pass mappings for report generation
-                progress_callback=progress_callback # Pass the progress callback function
+                progress_callback=progress_callback, # Pass the progress callback function
             )
 
             # Perform matching
             self.transaction_matcher.match_transactions()
-
-            # Generate reports
-            transaction_match_report_df = self.transaction_matcher.generate_transaction_match_report()
-            sale_match_report_df = self.transaction_matcher.generate_sale_match_report()
-            purchase_match_report_df = self.transaction_matcher.generate_purchase_match_report()
-            withholding_match_report_df = self.transaction_matcher.generate_withholding_match_report()
-
-            self.reports_generated = True
+            
             logger.info("Matching and report generation completed successfully.")
 
         except Exception as e:
@@ -273,6 +264,31 @@ class Application:
             logger.info(f"Matching and report generation took \033[1;36m{match_elapsed_time:.2f}\033[0m seconds.")
             logger.info("=" * 100)
 
+    def generate_report(self, report_type: str=None) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[pd.DataFrame]]:
+        """
+        Generate reports based on the specified report type.
+        
+        Args:
+            report_type: Type of report to generate (e.g., 'transaction', 'sale', 'purchase', 'withholding'), default is None means all reports.
+        
+        Returns:
+            A tuple containing the generated report DataFrames:
+            (transaction_match_report_df, sale_match_report_df, purchase_match_report_df, withholding_match_report_df)
+        """
+        logger.info(f"\033[1;36mGenerating {report_type} report...\033[0m")
+
+        transaction_match_report_df = None
+        sale_match_report_df = None
+        purchase_match_report_df = None
+        withholding_match_report_df = None
+
+        # Generate reports
+        transaction_match_report_df = self.transaction_matcher.generate_transaction_match_report()
+        sale_match_report_df = self.transaction_matcher.generate_sale_match_report()
+        purchase_match_report_df = self.transaction_matcher.generate_purchase_match_report()
+        withholding_match_report_df = self.transaction_matcher.generate_withholding_match_report()
+
+        self.reports_generated = True
         return (transaction_match_report_df, sale_match_report_df, purchase_match_report_df, withholding_match_report_df)
 
     def save_reports(self, report_dfs) -> None:
@@ -318,7 +334,9 @@ class Application:
             logger.info("=" * 100)
 
             # Perform matching and generate reports
-            report_dfs = self.perform_matching_and_generate_reports()
+            self.perform_matching()
+
+            report_dfs = self.generate_report()
 
             # Save the generated reports
             self.save_reports(report_dfs)
