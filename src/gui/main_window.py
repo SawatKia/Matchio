@@ -5,7 +5,6 @@ import os
 import webbrowser
 import traceback
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 from tkinter import ttk, filedialog, messagebox, font
 import tkinter as tk
 
@@ -442,7 +441,7 @@ class ApplicationGUI(tk.Tk):
                 sheet_info['var'].set("")
         except Exception as e:
             logger.error(f"Error listing Excel sheets: {e}")
-            self._show_error(f"Error listing Excel sheets: {str(e)}", is_developer=True)
+            self._show_error(f"Error listing Excel sheets: {str(e)}")
 
     def _browse_directory(self, stringvar, config_key):
         """Open directory browser dialog and update both the entry field and CONFIG"""
@@ -592,6 +591,7 @@ class ApplicationGUI(tk.Tk):
         ttk.Label(self.timing_frame, textvariable=self.avg_time_var).pack(side=tk.LEFT, padx=5)
         
         # Items progress
+        # FIXME - how many items per sec instead
         self.items_var = tk.StringVar(value=TranslationManager.get_translation(self.language.get(), "items_processed", "0", "0"))
         ttk.Label(self.timing_frame, textvariable=self.items_var).pack(side=tk.RIGHT, padx=5)
         
@@ -851,13 +851,9 @@ class ApplicationGUI(tk.Tk):
                 
                 # Safely perform matching and generate reports
                 try:
-                    report_dfs = self.app.perform_matching_and_generate_reports(
+                    self.app.perform_matching(
                         progress_callback=progress_callback
                     )
-                    if not report_dfs:
-                        raise RuntimeError("No report data generated")
-                        
-                    self.report_dfs = report_dfs
                     matching_time = time.time() - matching_start
                     self.avg_times['matching'] = matching_time / 100
                 except Exception as e:
@@ -872,6 +868,11 @@ class ApplicationGUI(tk.Tk):
                             "saving_reports"
                         )
                     ))
+                    report_dfs = self.app.generate_report()
+                    if not report_dfs:
+                        raise RuntimeError("No report data generated")
+                        
+                    self.report_dfs = report_dfs
                     self.app.save_reports(report_dfs)
                 except Exception as e:
                     logger.error(f"Error saving reports: {e}")
@@ -891,7 +892,7 @@ class ApplicationGUI(tk.Tk):
                 
             except Exception as e:
                 logger.error(f"Error in processing: {e}")
-                self.after(0, lambda: self._show_error(str(e), is_developer=True))
+                self.after(0, lambda e=e: self._show_error(str(e)))
                 
             finally:
                 # Update GUI on completion
@@ -916,9 +917,10 @@ class ApplicationGUI(tk.Tk):
             self.eta_var.set("Complete")
 
     # NOTE - show error box
-    def _show_error(self, message, is_developer=False):
+    def _show_error(self, message):
         """Show error message with appropriate detail level"""
         lang = self.language.get()
+        is_developer = os.getenv("ENV", "development").lower() == "development"
         
         if is_developer:
             # For developer: detailed error with stack trace
