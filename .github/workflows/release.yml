@@ -9,7 +9,7 @@ on:
 jobs:
   build-and-release:
     if: github.event.pull_request.merged == true
-    runs-on: windows-latest # Use Windows since you're building a Windows exe
+    runs-on: windows-latest # Use Windows since building a Windows exe
 
     steps:
       - name: Checkout code
@@ -28,7 +28,7 @@ jobs:
 
       - name: Build Matchio executable
         run: |
-          pyinstaller src/main.py --onefile --windowed --name=Matchio --icon=icon/finished-icon.ico
+          pyinstaller src/main.py --clean --onefile --windowed --name=Matchio --icon=icon/finished-icon.ico --exclude matplotlib --exclude notebook --exclude scipy --exclude sklearn --exclude-module unittest --exclude-module test
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
