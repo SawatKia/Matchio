@@ -1,11 +1,10 @@
 # src\utils\file_operations.py
 import pandas as pd
 import os
-import io
-import re
+from re import match
 from io import StringIO
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import List, Optional
 
 from utils import get_logger
 
@@ -108,7 +107,7 @@ class FileManager:
         try:
             FileManager.ensure_directory_exists(file_path)
 
-            buffer = io.StringIO()
+            buffer = StringIO()
             df.info(buf=buffer)
             info_str = buffer.getvalue()
             logger.debug(f"Dataframe info:\n{info_str}")
@@ -244,7 +243,7 @@ class FileManager:
             raw_lines = FileManager.load_raw_csv(file_path, encoding)
             
             # Filter lines that start with a number sequence (may have spaces before)
-            filtered_lines = [line for line in raw_lines if re.match(r'^\s*"\s+\d+",', line)]
+            filtered_lines = [line for line in raw_lines if match(r'^\s*"\s+\d+",', line)]
             display_items = 20
             logger.debug(f"Filtered {len(filtered_lines)} valid data lines")
             

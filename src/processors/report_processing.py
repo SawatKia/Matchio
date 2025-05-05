@@ -1,9 +1,8 @@
 # src\processors\report_processing.py
 import pandas as pd
-import os
-import io
+from io import StringIO
 import json
-from typing import Optional, Dict, Any, TypedDict, List
+from typing import Optional, TypedDict, List
 from tabulate import tabulate
 
 from utils import get_logger, FileManager, DataFrameCleaner
@@ -155,7 +154,7 @@ class ReportProcess:
     @staticmethod
     def _log_dataframe_sample(df: pd.DataFrame, rows: int = 5):
         try:
-            buffer = io.StringIO()
+            buffer = StringIO()
             df.info(buf=buffer)
             info_str = buffer.getvalue()
             logger.debug(f"Dataframe info:\n{info_str}")

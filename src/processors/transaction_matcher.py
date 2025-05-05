@@ -1,11 +1,9 @@
 # src\processors\transaction_matcher.py
 import pandas as pd
-import numpy as np
 from datetime import datetime, timedelta
-from typing import Dict, List, Tuple, Set, Optional, Callable
+from typing import Dict, List, Set, Optional, Callable
 import logging
 from pathlib import Path
-import os
 import time
 import itertools # Import for combinations
 
@@ -80,6 +78,7 @@ class TransactionMatcher:
         self.sale_df['original_index'] = self.sale_df.index
         self.purchase_df['original_index'] = self.purchase_df.index
         self.withholding_df['original_index'] = self.withholding_df.index
+
 
         self.progress_callback = progress_callback
         # Prepare data - handle potential errors
