@@ -8,7 +8,7 @@ from pathlib import Path
 from tkinter import ttk, filedialog, messagebox, font
 import tkinter as tk
 
-from utils import get_logger, FileManager, CONFIG
+from utils import get_logger, FileManager, CONFIG, EXPECTED_COLUMN_MAPPINGS
 from .constants import MatchingConstants
 from .translation import TranslationManager
 
@@ -83,8 +83,66 @@ class ApplicationGUI(tk.Tk):
 
         # Bind language change to update UI
         self.language.trace_add("write", self._update_all_text)
+
+        # Check for updates
+        self.after(100, self._check_for_updates)
         
         logger.info("GUI initialized")
+    
+    def _check_for_updates(self):
+        """Check for available updates"""
+        try:
+            update_info = self.app.check_for_updates()
+            if update_info:
+                if messagebox.askyesno(
+                    TranslationManager.get_translation(self.language.get(), "update_available"),
+                    TranslationManager.get_translation(
+                        self.language.get(),
+                        "update_message",
+                        update_info['version'],
+                        update_info['notes']
+                    )
+                ):
+                    self._download_and_install_update(update_info)
+        except Exception as e:
+            logger.error(f"Error checking for updates: {e}")
+
+    def _download_and_install_update(self, update_info):
+        """Download and install the update"""
+        try:
+            self._update_status(TranslationManager.get_translation(
+                self.language.get(),
+                "downloading_update"
+            ))
+            
+            update_file = self.app.updater.download_update(
+                update_info['url'],
+                update_info['version']
+            )
+            
+            if update_file:
+                self._update_status(TranslationManager.get_translation(
+                    self.language.get(),
+                    "installing_update"
+                ))
+                
+                if self.app.updater.install_update(update_file):
+                    messagebox.showinfo(
+                        TranslationManager.get_translation(self.language.get(), "update_success"),
+                        TranslationManager.get_translation(self.language.get(), "restart_required")
+                    )
+                    self.quit()
+                else:
+                    raise Exception("Update installation failed")
+            else:
+                raise Exception("Update download failed")
+                
+        except Exception as e:
+            logger.error(f"Error installing update: {e}")
+            messagebox.showerror(
+                TranslationManager.get_translation(self.language.get(), "update_error"),
+                str(e)
+            )
     
     # NOTE - language ui
     def _update_all_text(self, *args):
@@ -301,9 +359,15 @@ class ApplicationGUI(tk.Tk):
         input_label = ttk.Label(row_frame, text=TranslationManager.get_translation(self.language.get(), translation_key))
         self._register_widget(input_label, 'labels', translation_key, config_key)
         input_label.pack(side=tk.LEFT, padx=5)
-        
+
         # Create StringVar and entry to display the file path
         var = tk.StringVar(value=CONFIG.get(config_key, ""))
+
+        # ensure if user set new path, it will be update in global config
+        var.trace_add("write",
+            lambda *args, key=config_key: CONFIG.update({key: var.get()})
+            )
+        
         entry = ttk.Entry(row_frame, textvariable=var, width=50)
         entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
         
@@ -489,6 +553,8 @@ class ApplicationGUI(tk.Tk):
             file_path = getattr(self, f"{key}_var").get()
             if not file_path or not os.path.exists(file_path):
                 missing_files.append(label)
+    
+        # FIXME - verify if file extension valid
         
         # Check output directory
         output_dir = getattr(self, "output_dir_var").get()
@@ -502,6 +568,43 @@ class ApplicationGUI(tk.Tk):
             return False
             
         return True
+    
+    def _show_config_confirmation(self):
+        """Show current configuration to user and ask for confirmation before processing"""
+        lang = self.language.get()
+        
+        # Create a comprehensive config summary
+        config_summary = []
+        
+        # Files section
+        config_summary.append(TranslationManager.get_translation(lang, "config_files_header"))
+        purchase_file = os.path.basename(CONFIG.get('csv_exported_purchase_tax_report', ''))
+        sale_file = os.path.basename(CONFIG.get('csv_exported_sales_tax_report', ''))
+        withholding_file = os.path.basename(CONFIG.get('excel_Withholding_tax_report', ''))
+        statement_file = os.path.basename(CONFIG.get('excel_statement', ''))
+        output_dir = CONFIG.get('output_dir', '')
+        
+        config_summary.append(f"- {TranslationManager.get_translation(lang, 'purchase_tax')}: {purchase_file}")
+        config_summary.append(f"- {TranslationManager.get_translation(lang, 'sales_tax')}: {sale_file}")
+        config_summary.append(f"- {TranslationManager.get_translation(lang, 'withholding_tax')}: {withholding_file}")
+        config_summary.append(f"- {TranslationManager.get_translation(lang, 'bank_statement')}: {statement_file}")
+        config_summary.append(f"- {TranslationManager.get_translation(lang, 'output_dir')}: {output_dir}")
+        
+        # Settings section
+        config_summary.append("\n" + TranslationManager.get_translation(lang, "config_settings_header"))
+        config_summary.append(f"- {TranslationManager.get_translation(lang, 'matching_credit_days')}: {CONFIG.get('matching_credit_days', '')}")
+        config_summary.append(f"- {TranslationManager.get_translation(lang, 'matching_sale_tolerance')}: {CONFIG.get('matching_sale_tolerance', '')}")
+        config_summary.append(f"- {TranslationManager.get_translation(lang, 'matching_purchase_tolerance')}: {CONFIG.get('matching_purchase_tolerance', '')}")
+        
+        # Join the summary
+        summary_text = "\n".join(config_summary)
+        
+        # Ask for confirmation
+        return messagebox.askokcancel(
+            TranslationManager.get_translation(lang, "config_confirmation_title"),
+            TranslationManager.get_translation(lang, "config_confirmation_message") + "\n\n" + summary_text,
+            icon=messagebox.INFO
+        )
 
     # NOTE - settings widgets
     def change_font_size(self, delta):
@@ -550,6 +653,7 @@ class ApplicationGUI(tk.Tk):
             CONFIG[key] = var.get()
 
     # NOTE - processing widgets
+    # Add this method to the ApplicationGUI class
     def _create_status_area(self):
         """Create status display area"""
         status_frame = ttk.LabelFrame(self.process_tab, text=TranslationManager.get_translation(self.language.get(), "status"))
@@ -591,7 +695,6 @@ class ApplicationGUI(tk.Tk):
         ttk.Label(self.timing_frame, textvariable=self.avg_time_var).pack(side=tk.LEFT, padx=5)
         
         # Items progress
-        # FIXME - how many items per sec instead
         self.items_var = tk.StringVar(value=TranslationManager.get_translation(self.language.get(), "items_processed", "0", "0"))
         ttk.Label(self.timing_frame, textvariable=self.items_var).pack(side=tk.RIGHT, padx=5)
         
@@ -710,21 +813,24 @@ class ApplicationGUI(tk.Tk):
             minutes, seconds = divmod(remainder, 60)
             self.eta_var.set(f"{TranslationManager.get_translation(self.language.get(), 'eta')} {hours:02}:{minutes:02}:{seconds:02}")
             
-            # Calculate and update average time per item
+            # Calculate and update average processing speed
             if step == 0:
-                if self.processed_items['cleaning'] > 0:
-                    avg_time = elapsed / self.processed_items['cleaning']  # time per file
-                    self.avg_times['cleaning'] = avg_time
+                if self.processed_items['cleaning'] > 0 and elapsed > 0:
+                    speed = self.processed_items['cleaning'] / elapsed  # files per second
+                    self.avg_times['cleaning'] = speed
+                    self.avg_time_var.set(f"{TranslationManager.get_translation(self.language.get(), 'avg_time')} {speed:.1f}")
             else:
-                if self.processed_items['matching'] > 0:
-                    avg_time = elapsed / self.processed_items['matching']  # time per match
-                    self.avg_times['matching'] = avg_time
+                if self.processed_items['matching'] > 0 and elapsed > 0:
+                    speed = self.processed_items['matching'] / elapsed  # matches per second
+                    self.avg_times['matching'] = speed
+                    self.avg_time_var.set(f"{TranslationManager.get_translation(self.language.get(), 'avg_time')} {speed:.1f}")
             
-            # Calculate total average across all processed items
-            total_processed = self.processed_items['cleaning'] + self.processed_items['matching']
-            if total_processed > 0:
-                total_avg = elapsed / total_processed
-                self.avg_time_var.set(f"{TranslationManager.get_translation(self.language.get(), 'avg_time')} {total_avg:.2f}s/item")
+            # Calculate total processing speed
+            total_processed = self.processed_items['cleaning'] + self.processed_items['matching'] 
+            if total_processed > 0 and elapsed > 0:
+                total_speed = total_processed / elapsed
+                translation = TranslationManager.get_translation(self.language.get(), 'avg_time', f"{total_speed:.1f}")
+                self.avg_time_var.set(translation)
 
     def _update_elapsed_time(self):
         """Update the elapsed time display"""
@@ -736,10 +842,49 @@ class ApplicationGUI(tk.Tk):
             self.elapsed_var.set(f"{TranslationManager.get_translation(self.language.get(), 'elapsed')} {hours:02}:{minutes:02}:{seconds:02}")
             self.after(1000, self._update_elapsed_time)
 
+    def _update_matching_summary(self, stats):
+        """Update status area with matching summary"""
+        self._update_status("\n=== Matching Summary ===")
+        self._update_status(TranslationManager.get_translation(
+            self.language.get(),
+            "matching_summary_total",
+            stats['total'],
+            stats['matched'],
+            f"{stats['matched_pct']:.1f}"
+        ))
+        
+        self._update_status(TranslationManager.get_translation(
+            self.language.get(),
+            "matching_summary_sales",
+            stats['sale_matched'],
+            stats['sale_total'],
+            f"{stats['sale_matched_pct']:.1f}"
+        ))
+        
+        self._update_status(TranslationManager.get_translation(
+            self.language.get(),
+            "matching_summary_purchases",
+            stats['purchase_matched'],
+            stats['purchase_total'],
+            f"{stats['purchase_matched_pct']:.1f}"
+        ))
+        
+        self._update_status(TranslationManager.get_translation(
+            self.language.get(),
+            "matching_summary_withholding",
+            stats['withholding_matched'],
+            stats['withholding_total'],
+            f"{stats['withholding_matched_pct']:.1f}"
+        ))
+
     def _start_full_process(self):
         """Start the entire processing workflow"""
         if not self._validate_input_files():
             return
+        
+        # Show configuration confirmation dialog
+        if not self._show_config_confirmation():
+            return  # User canceled the operation
         
         # Update GUI state
         self._update_status(TranslationManager.get_translation(self.language.get(), "start_processing"))
@@ -783,7 +928,6 @@ class ApplicationGUI(tk.Tk):
                 self.after(0, lambda: self._update_status(
                     TranslationManager.get_translation(self.language.get(), "cleaning")
                 ))
-                
                 def file_processing_callback(file_type, current, total):
                     file_names = {
                         "purchase": os.path.basename(CONFIG.get('csv_exported_purchase_tax_report', "")),
@@ -799,9 +943,24 @@ class ApplicationGUI(tk.Tk):
                 
                 # Safely process report files
                 try:
+                    # FIXME - add number of colimn validation before process the report files to the number of existing columns(that not null) are equal to the number of that expected columns
+
+                    # FIXME - collect the error message and show it to the user
                     self.app.process_report_files(progress_callback=file_processing_callback)
                     cleaning_time = time.time() - cleaning_start
                     self.avg_times['cleaning'] = cleaning_time / 4
+
+                    # Validate required columns
+                    self._update_status(TranslationManager.get_translation(self.language.get(), "validating_columns"))
+                    validation_errors = self.app.validate_required_columns()
+                    if validation_errors:
+                        error_message = TranslationManager.get_translation(self.language.get(), "column_validation_error") + "\n\n"
+                        for file_type, columns in validation_errors.items():
+                            file_type_translation = TranslationManager.get_translation(self.language.get(), file_type + "_name")
+                            error_message += f"{file_type_translation}:\n"
+                            for col in columns:
+                                error_message += f"- {col}\n"
+                        raise RuntimeError(error_message)
                 except Exception as e:
                     logger.error(f"Error processing report files: {e}")
                     raise RuntimeError(f"Failed to process report files: {str(e)}")
@@ -856,6 +1015,11 @@ class ApplicationGUI(tk.Tk):
                     )
                     matching_time = time.time() - matching_start
                     self.avg_times['matching'] = matching_time / 100
+
+                    # Update UI with matching summary
+                    if hasattr(self.app, 'matching_stats'):
+                        self._update_matching_summary(self.app.matching_stats)
+
                 except Exception as e:
                     logger.error(f"Error in matching process: {e}")
                     raise RuntimeError(f"Failed during matching process: {str(e)}")
@@ -913,8 +1077,17 @@ class ApplicationGUI(tk.Tk):
             elapsed = time.time() - self.start_time
             hours, remainder = divmod(int(elapsed), 3600)
             minutes, seconds = divmod(remainder, 60)
-            self.elapsed_var.set(f"Total time: {hours:02}:{minutes:02}:{seconds:02}")
-            self.eta_var.set("Complete")
+            # Use translations for time display and completion status
+            time_str = f"{hours:02}:{minutes:02}:{seconds:02}"
+            self.elapsed_var.set(TranslationManager.get_translation(
+                self.language.get(),
+                "total_time",
+                time_str
+            ))
+            self.eta_var.set(TranslationManager.get_translation(
+                self.language.get(),
+                "process_complete"
+            ))
 
     # NOTE - show error box
     def _show_error(self, message):
