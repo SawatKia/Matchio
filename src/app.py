@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 import time
 
-from utils import initialize_logging, get_logger, FileManager, CONFIG, EXPECTED_COLUMN_MAPPINGS
+from utils import initialize_logging, get_logger, FileManager, Updater, CONFIG, EXPECTED_COLUMN_MAPPINGS
 from processors import ReportProcess, Reports, TransactionMatcher 
 from gui import ApplicationGUI
 
@@ -16,6 +16,7 @@ logger = get_logger()
 EXPECTED_COLUMN_MAPPINGS['transaction_match_report'] = TransactionMatcher.TRANSACTION_REPORT_COLS_MAP
 
 class Application:
+    VERSION = "1.0.0"
     def __init__(self):
         self.report_processor = None
         self.transaction_matcher = None
@@ -27,6 +28,14 @@ class Application:
         
         # Initialize logging immediately
         initialize_logging()
+
+        # Initialize updater
+        self.updater = Updater(
+            self.VERSION,
+            repo_owner="SawatKia",
+            repo_name="matchio"
+        )
+
         logger.info("Application initialized")
 
     def initialize_services(self) -> None:
@@ -56,6 +65,16 @@ class Application:
             logger.info("All Services initialization phase completed")
         except Exception as error:
             logger.error(f'Error initializing services: {error}')
+        
+    def check_for_updates(self):
+        """Check for and handle application updates"""
+        try:
+            update_info = self.updater.check_for_updates()
+            if update_info:
+                return update_info
+        except Exception as e:
+            logger.error(f"Error in update check: {e}")
+        return None
 
     def process_purchase_report(self) -> Optional[pd.DataFrame]:
         """Process the purchase tax report."""
@@ -170,44 +189,108 @@ class Application:
 
         return result
 
+    # Add this method to the Application class
+    def validate_required_columns(self):
+        """Validate that all required columns in each file are not empty"""
+        validation_errors = {}
+        
+        # Check purchase tax report
+        if self.purchase_df is not None:
+            purchase_columns = EXPECTED_COLUMN_MAPPINGS['purchase_tax_report'].values()
+            missing_columns = []
+            for col in purchase_columns:
+                if col in self.purchase_df.columns:
+                    if self.purchase_df[col].isna().all() or (self.purchase_df[col] == '').all():
+                        missing_columns.append(col)
+                else:
+                    missing_columns.append(col)
+            if missing_columns:
+                validation_errors['purchase_tax_report'] = missing_columns
+        
+        # Check sale tax report
+        if self.sale_df is not None:
+            sale_columns = EXPECTED_COLUMN_MAPPINGS['sale_tax_report'].values()
+            missing_columns = []
+            for col in sale_columns:
+                if col in self.sale_df.columns:
+                    if self.sale_df[col].isna().all() or (self.sale_df[col] == '').all():
+                        missing_columns.append(col)
+                else:
+                    missing_columns.append(col)
+            if missing_columns:
+                validation_errors['sale_tax_report'] = missing_columns
+        
+        # Check withholding tax report
+        if self.withholding_df is not None:
+            withholding_columns = EXPECTED_COLUMN_MAPPINGS['withholding_tax_report'].values()
+            missing_columns = []
+            for col in withholding_columns:
+                if col in self.withholding_df.columns:
+                    if self.withholding_df[col].isna().all() or (self.withholding_df[col] == '').all():
+                        missing_columns.append(col)
+                else:
+                    missing_columns.append(col)
+            if missing_columns:
+                validation_errors['withholding_tax_report'] = missing_columns
+        
+        # Check statement
+        if self.statement_df is not None:
+            statement_columns = EXPECTED_COLUMN_MAPPINGS['statement'].values()
+            missing_columns = []
+            for col in statement_columns:
+                if col in self.statement_df.columns:
+                    if self.statement_df[col].isna().all() or (self.statement_df[col] == '').all():
+                        missing_columns.append(col)
+                else:
+                    missing_columns.append(col)
+            if missing_columns:
+                validation_errors['statement'] = missing_columns
+        
+        return validation_errors
+    
     def process_report_files(self, progress_callback=None) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[pd.DataFrame]]:
         """Process all report files."""
-        logger.info(f"Starting overall report processing...")
-        self.purchase_df = self.process_purchase_report()
-        if progress_callback:
-            progress_callback("purchase", 1, 4)
-        self.sale_df, self.withholding_df = self.process_sale_reports(progress_callback)
-        self.statement_df = self.process_statements()
-        if progress_callback:
-            progress_callback("statement", 4, 4)
+        try:
+            logger.info(f"Starting overall report processing...")
+            self.purchase_df = self.process_purchase_report()
+            if progress_callback:
+                progress_callback("purchase", 1, 4)
+            self.sale_df, self.withholding_df = self.process_sale_reports(progress_callback)
+            self.statement_df = self.process_statements()
+            if progress_callback:
+                progress_callback("statement", 4, 4)
 
-        # Log each DataFrame name first, then its info
-        logger.debug("purchase_df:")
-        if self.report_processor:
-            self.report_processor._log_dataframe_sample(self.purchase_df)
-        else:
-            logger.warning("ReportProcess not initialized, cannot log dataframe sample.")
+            # Log each DataFrame name first, then its info
+            logger.debug("purchase_df:")
+            if self.report_processor:
+                self.report_processor._log_dataframe_sample(self.purchase_df)
+            else:
+                logger.warning("ReportProcess not initialized, cannot log dataframe sample.")
 
-        logger.debug("sale_df:")
-        if self.report_processor:
-            self.report_processor._log_dataframe_sample(self.sale_df)
-        else:
-            logger.warning("ReportProcess not initialized, cannot log dataframe sample.")
+            logger.debug("sale_df:")
+            if self.report_processor:
+                self.report_processor._log_dataframe_sample(self.sale_df)
+            else:
+                logger.warning("ReportProcess not initialized, cannot log dataframe sample.")
 
-        logger.debug("withholding_df:")
-        if self.report_processor:
-            self.report_processor._log_dataframe_sample(self.withholding_df)
-        else:
-            logger.warning("ReportProcess not initialized, cannot log dataframe sample.")
+            logger.debug("withholding_df:")
+            if self.report_processor:
+                self.report_processor._log_dataframe_sample(self.withholding_df)
+            else:
+                logger.warning("ReportProcess not initialized, cannot log dataframe sample.")
 
-        logger.debug("statement_df:")
-        if self.report_processor:
-            self.report_processor._log_dataframe_sample(self.statement_df)
-        else:
-            logger.warning("ReportProcess not initialized, cannot log dataframe sample.")
+            logger.debug("statement_df:")
+            if self.report_processor:
+                self.report_processor._log_dataframe_sample(self.statement_df)
+            else:
+                logger.warning("ReportProcess not initialized, cannot log dataframe sample.")
 
-        logger.info(f"Overall report processing finished.")
-        logger.info("=" * 100)
+            logger.info(f"Overall report processing finished.")
+        except Exception as e:
+            logger.error(f"Error during report processing: {e}", exc_info=True)
+            raise 
+        finally:
+            logger.info("=" * 100)
 
         return (self.purchase_df, self.sale_df, self.withholding_df, self.statement_df)
 
@@ -251,6 +334,30 @@ class Application:
 
             # Perform matching
             self.transaction_matcher.match_transactions()
+
+            # Get matching statistics
+            stats = {
+                'total': self.transaction_matcher.total_statement_entries,
+                'matched': self.transaction_matcher.matched_statement_entries,
+                'unmatched': self.transaction_matcher.unmatched_statement_entries,
+                'matched_pct': (self.transaction_matcher.matched_statement_entries/self.transaction_matcher.total_statement_entries * 100) if self.transaction_matcher.total_statement_entries > 0 else 0.0,
+                'sale_matched': len(self.transaction_matcher.matched_sale_indexes),
+                'sale_total': len(self.sale_df) if not self.sale_df.empty else 0,
+                'purchase_matched': len(self.transaction_matcher.matched_purchase_indexes),
+                'purchase_total': len(self.purchase_df) if not self.purchase_df.empty else 0,
+                'withholding_matched': len(self.transaction_matcher.matched_withholding_indexes),
+                'withholding_total': len(self.withholding_df) if not self.withholding_df.empty else 0,
+            }
+            
+            # Calculate additional percentages
+            stats.update({
+                'sale_matched_pct': (stats['sale_matched']/stats['sale_total'] * 100) if stats['sale_total'] > 0 else 0,
+                'purchase_matched_pct': (stats['purchase_matched']/stats['purchase_total'] * 100) if stats['purchase_total'] > 0 else 0,
+                'withholding_matched_pct': (stats['withholding_matched']/stats['withholding_total'] * 100) if stats['withholding_total'] > 0 else 0,
+            })
+            
+            # Store stats for UI update
+            self.matching_stats = stats
             
             logger.info("Matching and report generation completed successfully.")
 
