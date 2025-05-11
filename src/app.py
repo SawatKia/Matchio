@@ -76,7 +76,7 @@ class Application:
             logger.error(f"Error in update check: {e}")
         return None
 
-    def process_purchase_report(self) -> Optional[pd.DataFrame]:
+    def process_purchase_report(self, error_callback=None) -> Optional[pd.DataFrame]:
         """Process the purchase tax report."""
         logger.info(f"\033[1;36mProcessing purchase tax report...\033[0m")
         result = None
@@ -96,15 +96,21 @@ class Application:
                 logger.error("ReportProcess is not initialized.")
 
         except FileNotFoundError as e:
-            logger.error(f"Purchase tax report file not found: {e}")
+            err_msg = f"Purchase tax report file not found: {e}"
+            logger.error(err_msg)
+            if error_callback:
+                error_callback(err_msg)
         except Exception as e:
-            logger.error(f"Error processing purchase tax report: {e}", exc_info=True) 
+            err_msg = f"Error processing purchase tax report: {e}"
+            logger.error(err_msg, exc_info=True) 
+            if error_callback:
+                error_callback(err_msg)
         finally:
             logger.info("=" * 100)
 
         return result
 
-    def process_sale_reports(self, progress_callback) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
+    def process_sale_reports(self, progress_callback, error_callback=None) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
         """Process both the sale tax and withholding tax reports."""
         logger.info(f"\033[1;36mProcessing sale reports...\033[0m")
 
@@ -127,9 +133,15 @@ class Application:
                 logger.error("ReportProcess is not initialized.")
 
         except FileNotFoundError as e:
-            logger.error(f"Sale tax report file not found: {e}")
+            err_msg = f"Sale tax report file not found: {e}"
+            logger.error(err_msg)
+            if error_callback:
+                error_callback(err_msg)
         except Exception as e:
-            logger.error(f"Error processing sale tax report: {e}", exc_info=True)
+            err_msg = f"Error processing sale tax report: {e}"
+            logger.error(err_msg, exc_info=True)
+            if error_callback:
+                error_callback(err_msg)
         finally:
             if progress_callback:
                 progress_callback("sale", 2, 4)
@@ -151,9 +163,15 @@ class Application:
                 logger.error("ReportProcess is not initialized.")
 
         except FileNotFoundError as e:
-            logger.error(f"Withholding tax report file not found: {e}")
+            err_msg = f"Withholding tax report file not found: {e}"
+            logger.error(err_msg)
+            if error_callback:
+                error_callback(err_msg)
         except Exception as e:
-            logger.error(f"Error processing withholding tax report: {e}", exc_info=True)
+            err_msg = f"Error processing withholding tax report: {e}"
+            logger.error(err_msg, exc_info=True)
+            if error_callback:
+                error_callback(err_msg)
         finally:
             if progress_callback:
                 progress_callback("withholding", 3, 4)
@@ -161,7 +179,7 @@ class Application:
 
         return (sale_df, withholding_df)
 
-    def process_statements(self) -> Optional[pd.DataFrame]:
+    def process_statements(self, error_callback=None) -> Optional[pd.DataFrame]:
         """Process the bank statement file."""
         logger.info(f"\033[1;36mProcessing statements...\033[0m")
         result = None
@@ -181,9 +199,15 @@ class Application:
                 logger.error("ReportProcess is not initialized.")
 
         except FileNotFoundError as e:
-            logger.error(f"Statement file not found: {e}")
+            err_msg = f"Statement file not found: {e}"
+            logger.error(err_msg)
+            if error_callback:
+                error_callback(err_msg)
         except Exception as e:
-            logger.error(f"Error processing statement: {e}", exc_info=True)
+            err_msg = f"Error processing statement: {e}"
+            logger.error(err_msg, exc_info=True)
+            if error_callback:
+                error_callback(err_msg)
         finally:
             logger.info("=" * 100)
 
@@ -196,67 +220,84 @@ class Application:
         
         # Check purchase tax report
         if self.purchase_df is not None:
-            purchase_columns = EXPECTED_COLUMN_MAPPINGS['purchase_tax_report'].values()
+            purchase_columns = EXPECTED_COLUMN_MAPPINGS['purchase_tax_report'].keys()
+
             missing_columns = []
             for col in purchase_columns:
                 if col in self.purchase_df.columns:
                     if self.purchase_df[col].isna().all() or (self.purchase_df[col] == '').all():
                         missing_columns.append(col)
+                        logger.warning(f"Purchase tax report column '{col}' is empty.")
                 else:
                     missing_columns.append(col)
+                    logger.warning(f"Purchase tax report column '{col}' is missing.")
             if missing_columns:
                 validation_errors['purchase_tax_report'] = missing_columns
         
         # Check sale tax report
         if self.sale_df is not None:
-            sale_columns = EXPECTED_COLUMN_MAPPINGS['sale_tax_report'].values()
+            sale_columns = EXPECTED_COLUMN_MAPPINGS['sale_tax_report'].keys()
             missing_columns = []
             for col in sale_columns:
                 if col in self.sale_df.columns:
                     if self.sale_df[col].isna().all() or (self.sale_df[col] == '').all():
                         missing_columns.append(col)
+                        logger.warning(f"Sale tax report column '{col}' is empty.")
                 else:
                     missing_columns.append(col)
+                    logger.warning(f"Sale tax report column '{col}' is missing.")
             if missing_columns:
                 validation_errors['sale_tax_report'] = missing_columns
         
         # Check withholding tax report
         if self.withholding_df is not None:
-            withholding_columns = EXPECTED_COLUMN_MAPPINGS['withholding_tax_report'].values()
+            withholding_columns = EXPECTED_COLUMN_MAPPINGS['withholding_tax_report'].keys()
             missing_columns = []
             for col in withholding_columns:
                 if col in self.withholding_df.columns:
                     if self.withholding_df[col].isna().all() or (self.withholding_df[col] == '').all():
                         missing_columns.append(col)
+                        logger.warning(f"Withholding tax report column '{col}' is empty.")
                 else:
                     missing_columns.append(col)
+                    logger.warning(f"Withholding tax report column '{col}' is missing.")
             if missing_columns:
                 validation_errors['withholding_tax_report'] = missing_columns
         
         # Check statement
         if self.statement_df is not None:
-            statement_columns = EXPECTED_COLUMN_MAPPINGS['statement'].values()
+            statement_columns = EXPECTED_COLUMN_MAPPINGS['statement'].keys()
             missing_columns = []
             for col in statement_columns:
                 if col in self.statement_df.columns:
                     if self.statement_df[col].isna().all() or (self.statement_df[col] == '').all():
                         missing_columns.append(col)
+                        logger.warning(f"Statement column '{col}' is empty.")
                 else:
                     missing_columns.append(col)
+                    logger.warning(f"Statement column '{col}' is missing.")
             if missing_columns:
                 validation_errors['statement'] = missing_columns
+
+        # Log any validation errors
+        if validation_errors:
+            logger.error("Validation errors found:")
+            for file_type, errors in validation_errors.items():
+                logger.error(f"{file_type}: {errors}")
+        else:
+            logger.info("All required columns are present and valid.")
         
         return validation_errors
-    
-    def process_report_files(self, progress_callback=None) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[pd.DataFrame]]:
+      
+    def process_report_files(self, progress_callback=None, error_callback=None) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[pd.DataFrame]]:
         """Process all report files."""
         try:
             logger.info(f"Starting overall report processing...")
-            self.purchase_df = self.process_purchase_report()
+            self.purchase_df = self.process_purchase_report(error_callback)
             if progress_callback:
                 progress_callback("purchase", 1, 4)
-            self.sale_df, self.withholding_df = self.process_sale_reports(progress_callback)
-            self.statement_df = self.process_statements()
+            self.sale_df, self.withholding_df = self.process_sale_reports(progress_callback, error_callback)
+            self.statement_df = self.process_statements(error_callback)
             if progress_callback:
                 progress_callback("statement", 4, 4)
 
@@ -287,14 +328,17 @@ class Application:
 
             logger.info(f"Overall report processing finished.")
         except Exception as e:
-            logger.error(f"Error during report processing: {e}", exc_info=True)
+            err_msg = f"Error during report processing: {e}"
+            logger.error(err_msg, exc_info=True)
+            if error_callback:
+                error_callback(err_msg)
             raise 
         finally:
             logger.info("=" * 100)
 
         return (self.purchase_df, self.sale_df, self.withholding_df, self.statement_df)
 
-    def perform_matching(self, progress_callback = None) -> None:
+    def perform_matching(self, progress_callback = None, error_callback=None) -> None:
         """
         Performs transaction matching and generates match status reports.
         
@@ -329,7 +373,8 @@ class Application:
                 sale_tolerance=CONFIG.get('matching_sale_tolerance', 1000.0),
                 purchase_tolerance=CONFIG.get('matching_purchase_tolerance', 50.0),
                 expected_column_mappings=EXPECTED_COLUMN_MAPPINGS, # Pass mappings for report generation
-                progress_callback=progress_callback, # Pass the progress callback function
+                progress_callback=progress_callback,
+                error_callback=error_callback
             )
 
             # Perform matching
