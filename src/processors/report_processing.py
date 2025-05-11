@@ -123,6 +123,7 @@ class ReportProcess:
             logger.debug(f"\033[1;31m<\033[0m Expected columns: {expected_columns}::{type(expected_columns)}")
 
             added_columns = []
+            missing_columns = []
             # Check if actual columns are fewer than expected columns
             logger.debug(f"verifying condition if {len(df.columns)} < {len(expected_columns)}")
             if len(df.columns) < len(expected_columns):
@@ -134,9 +135,16 @@ class ReportProcess:
                     elif col == "days_outstanding" or col == "days_since_payment":
                         df[col] = 0
                     else:
-                        df[col] = 1111
+                        missing_columns.append(col)
+                    
+                    if col != "matched" or col != "days_outstanding" or col != "days_since_payment":
+                        logger.error(f"Missing columns: {', '.join(missing_columns)} ")
+                        raise ValueError(f"Missing columns: {', '.join(missing_columns)}")
                     logger.warning(f"Added {df[col].unique()} value to column: '{col}' ")
                     added_columns.append(col)
+            else:
+                logger.warning("Actual column count not met the expected columns")
+                raise ValueError("Actual column count not met the expected columns")
             columns_match = pd.Index(df.columns).equals(pd.Index(expected_columns))
             logger.debug(f"All columns match?: {columns_match}")
             if not columns_match:
@@ -368,6 +376,7 @@ class ReportProcess:
             
             # Set default sheet name if not provided
             if sheet_name is None:
+                # FIXME - read the CONFIG after it was set from maim_window.py
                 sheet_name = r"หัก ณ ที่จ่าย"  # r for non-ascii text
                 logger.warning(f"Sheet name not provided, default to: {sheet_name}")
             
@@ -383,7 +392,7 @@ class ReportProcess:
             ReportProcess._log_dataframe_sample(df, 10)
             
             # Validate columns
-            expected_columns = self.EXPECTED_COLUMNS.get('excel_Withholding_tax_report', {})
+            expected_columns = self.EXPECTED_COLUMNS.get('withholding_tax_report', {})
             logger.debug(f"Expected columns: {expected_columns}")
 
             # 2. cleaning by handle na, null, another invalid values properly
@@ -431,6 +440,7 @@ class ReportProcess:
             
             # Set default sheet name if not provided
             if sheet_name is None:
+                # FIXME - read the CONFIG after it was set from maim_window.py
                 sheet_name = r"Sheet1"  # Excel default sheet name
                 logger.warning(f"Sheet name not provided, default to: {sheet_name}")
             
