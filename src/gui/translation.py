@@ -79,6 +79,12 @@ class TranslationManager:
             "sale_tax_report_name": "Sales Tax Report",
             "withholding_tax_report_name": "Withholding Tax Report",
             "statement_name": "Bank Statement",
+            "invalid_extensions": "Files have incorrect extensions:",
+            "csv_exported_purchase_tax_report": "Purchase Tax Report",
+            "csv_exported_sales_tax_report": "Sales Tax Report", 
+            "excel_Withholding_tax_report": "Withholding Tax Report",
+            "excel_statement": "Bank Statement",
+            "validating_column_counts": "Validating column counts...",
         },
         "th": {
             "initializing_services": "กำลังเตรียมระบบให้พร้อมใช้งาน...",
@@ -154,6 +160,12 @@ class TranslationManager:
             "sale_tax_report_name": "รายงานภาษีขาย",
             "withholding_tax_report_name": "รายงานภาษีหัก ณ ที่จ่าย",
             "statement_name": "รายการบัญชี",
+            "invalid_extensions": "ไฟล์มีนามสกุลไม่ถูกต้อง:",
+            "csv_exported_purchase_tax_report": "รายงานภาษีซื้อ",
+            "csv_exported_sales_tax_report": "รายงานภาษีขาย",
+            "excel_Withholding_tax_report": "รายงานภาษีหัก ณ ที่จ่าย", 
+            "excel_statement": "รายการเดินบัญชี",
+            "validating_column_counts": "กำลังตรวจสอบจำนวนคอลัมน์...",
         }
     }
 
