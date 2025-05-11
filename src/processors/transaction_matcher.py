@@ -32,7 +32,8 @@ class TransactionMatcher:
                  sale_tolerance: float = 1000.0,
                  purchase_tolerance: float = 50.0,
                  expected_column_mappings: Dict = None,
-                 progress_callback: Callable[[int, int], None] = None) -> None:
+                 progress_callback: Callable[[int, int], None] = None,
+                 error_callback: Callable[[str], None] = None) -> None:
         """
         Initialize the transaction matcher
 
@@ -81,9 +82,11 @@ class TransactionMatcher:
 
 
         self.progress_callback = progress_callback
+        self.error_callback = error_callback
         # Prepare data - handle potential errors
         try:
             self._prepare_data()
+            logger.info("Matching initialized")
         except Exception as e:
             logger.error(f"Error during data preparation: {e}")
             # Depending on the error, decide if matching can proceed.
@@ -606,7 +609,6 @@ class TransactionMatcher:
 
         return matched_info
 
-
     def match_transactions(self) -> None:
         """Match all transactions in the statement with invoices"""
         logger.info(f"Starting transaction matching process (max_credit_days={self.max_credit_days}, sale_tolerance={self.sale_tolerance}, purchase_tolerance={self.purchase_tolerance})")
@@ -638,8 +640,10 @@ class TransactionMatcher:
                     if match_result['is_matched']:
                          self.matched_statement_entries += 1
             except Exception as e:
-                logger.error(f"Error processing statement entry at index {idx}: {e}")
-                # Decide if to continue or stop on error. Continuing for robustness.
+                err_msg = f"Error processing statement entry at index {idx}: {e}"
+                logger.error(err_msg)
+                if self.error_callback:
+                    self.error_callback(err_msg)
             finally:
                 self.processed_entries += 1
                 if self.progress_callback:
