@@ -398,6 +398,7 @@ class ApplicationGUI(tk.Tk):
         sheet_label.pack(side=tk.LEFT, padx=2)
         
         # Create combobox for sheet selection
+        # FIXME - send the selected sheet name to CONFIG
         sheet_var = tk.StringVar()
         sheet_combo = ttk.Combobox(sheet_frame, textvariable=sheet_var, width=15, state="readonly")
         sheet_combo.pack(side=tk.LEFT, padx=2)
@@ -539,6 +540,7 @@ class ApplicationGUI(tk.Tk):
 
     def _validate_input_files(self):
         """Validate that all required input files are specified"""
+        logger.info("Validating input files")
         missing_files = []
         
         # Check required files
@@ -553,9 +555,8 @@ class ApplicationGUI(tk.Tk):
             file_path = getattr(self, f"{key}_var").get()
             if not file_path or not os.path.exists(file_path):
                 missing_files.append(label)
+                logger.warning(f"Missing file: {label} ({file_path})")
     
-        # FIXME - verify if file extension valid
-        
         # Check output directory
         output_dir = getattr(self, "output_dir_var").get()
         if not output_dir:
@@ -564,9 +565,39 @@ class ApplicationGUI(tk.Tk):
         if missing_files:
             message = TranslationManager.get_translation(self.language.get(), "missing_files") + "\n- " + "\n- ".join(missing_files)
             messagebox.showerror(TranslationManager.get_translation(self.language.get(), "error"), message)
+            logger.warning(f"Missing files: {', '.join(missing_files)}")
             self._update_status(message)
             return False
-            
+        
+        logger.info("verifying file extensions")
+        # Check file extensions
+        invalid_extensions = []
+        file_extension_map = {
+            'csv_exported_purchase_tax_report': '.csv',
+            'csv_exported_sales_tax_report': '.csv',
+            'excel_Withholding_tax_report': ['.xlsx', '.xls'],
+            'excel_statement': ['.xlsx', '.xls']
+        }
+
+        for key, expected_extensions in file_extension_map.items():
+            file_path = getattr(self, f"{key}_var").get()
+            if file_path:
+                file_extension = os.path.splitext(file_path)[1].lower()
+                if isinstance(expected_extensions, list):
+                    if file_extension not in expected_extensions:
+                        invalid_extensions.append(f"{TranslationManager.get_translation(self.language.get(), key)} ({', '.join(expected_extensions)})")
+                        logger.warning(f"Invalid file extension for {key}: {file_extension} (expected: {', '.join(expected_extensions)})")
+                elif file_extension != expected_extensions:
+                    invalid_extensions.append(f"{TranslationManager.get_translation(self.language.get(), key)} ({expected_extensions})")
+                    logger.warning(f"Invalid file extension for {key}: {file_extension} (expected: {expected_extensions})")
+
+        if invalid_extensions:
+            message = TranslationManager.get_translation(self.language.get(), "invalid_extensions") + "\n- " + "\n- ".join(invalid_extensions)
+            messagebox.showerror(TranslationManager.get_translation(self.language.get(), "error"), message)
+            self._update_status(message)
+            return False
+        
+        logger.info("All files validated successfully")
         return True
     
     def _show_config_confirmation(self):
@@ -906,6 +937,7 @@ class ApplicationGUI(tk.Tk):
         self._update_elapsed_time()
         
         # Run processing in a separate thread
+        # FIXME - if any process errors, the program should stop working
         def process_thread():
             try:
                 # Update CONFIG from GUI before processing
@@ -922,6 +954,19 @@ class ApplicationGUI(tk.Tk):
                 except Exception as e:
                     logger.error(f"Error initializing services: {e}")
                     raise RuntimeError(f"Failed to initialize services: {str(e)}")
+                
+                # try:
+                #     #  validate number of column before process the report files to verify that the number of existing columns(that not null) are equal to the number of that expected columns
+                #     self._update_status(TranslationManager.get_translation(self.language.get(), "validating_column_counts"))
+                #     logger.info("Validating column counts")
+                #     column_count_errors = self.app.validate_column_counts()
+                #     if column_count_errors:
+                #         if self._collect_and_display_errors(column_count_errors, "column_count_errors"):
+                #             return
+                # except Exception as e:
+                #     logger.error(f"Error during column count validation: {e}")
+                #     self._show_error(str(e))
+                #     return
                 
                 # Process reports (cleaning step)
                 cleaning_start = time.time()
@@ -941,26 +986,32 @@ class ApplicationGUI(tk.Tk):
                     ): self._update_status(msg))
                     self.after(0, lambda i=current: self._update_progress(0, i))
                 
-                # Safely process report files
+                # NOTE - Safely process report files
                 try:
-                    # FIXME - add number of colimn validation before process the report files to the number of existing columns(that not null) are equal to the number of that expected columns
+                    # collect the error messages and show it to the user
+                    matching_errors = []
+                    
+                    def error_collecting_callback(error_msg):
+                        matching_errors.append(error_msg)
 
-                    # FIXME - collect the error message and show it to the user
-                    self.app.process_report_files(progress_callback=file_processing_callback)
+                    # collect the error messages and show it to the user
+                    self.app.process_report_files(
+                        progress_callback=file_processing_callback,
+                        error_callback=error_collecting_callback)
                     cleaning_time = time.time() - cleaning_start
                     self.avg_times['cleaning'] = cleaning_time / 4
 
+                    if matching_errors:
+                        error_dict = {"matching_errors": matching_errors}
+                        self.after(0, lambda: self._collect_and_display_errors(error_dict, "matching_errors_found"))
+
                     # Validate required columns
                     self._update_status(TranslationManager.get_translation(self.language.get(), "validating_columns"))
+                    
                     validation_errors = self.app.validate_required_columns()
                     if validation_errors:
-                        error_message = TranslationManager.get_translation(self.language.get(), "column_validation_error") + "\n\n"
-                        for file_type, columns in validation_errors.items():
-                            file_type_translation = TranslationManager.get_translation(self.language.get(), file_type + "_name")
-                            error_message += f"{file_type_translation}:\n"
-                            for col in columns:
-                                error_message += f"- {col}\n"
-                        raise RuntimeError(error_message)
+                        self.after(0, lambda: self._collect_and_display_errors(validation_errors, "column_validation_error"))
+                        raise RuntimeError(TranslationManager.get_translation(self.language.get(), "column_validation_failed"))
                 except Exception as e:
                     logger.error(f"Error processing report files: {e}")
                     raise RuntimeError(f"Failed to process report files: {str(e)}")
@@ -985,7 +1036,7 @@ class ApplicationGUI(tk.Tk):
                     logger.warning(f"Error getting statement length: {e}, using default")
                     self.total_items['matching'] = 500
                 
-                # Perform matching (matching step)
+                # NOTE - Perform matching (matching step)
                 matching_start = time.time()
                 self.current_step = 1
                 self.after(0, lambda: self._update_status(
@@ -1010,16 +1061,28 @@ class ApplicationGUI(tk.Tk):
                 
                 # Safely perform matching and generate reports
                 try:
+                    # collect the error messages and show it to the user
+                    matching_errors = []
+                    
+                    def error_collecting_callback(error_msg):
+                        matching_errors.append(error_msg)
+                        
                     self.app.perform_matching(
-                        progress_callback=progress_callback
+                        progress_callback=progress_callback,
+                        error_callback=error_collecting_callback
                     )
+                    
+                    if matching_errors:
+                        error_dict = {"matching_errors": matching_errors}
+                        self.after(0, lambda: self._collect_and_display_errors(error_dict, "matching_errors_found"))
+                    
                     matching_time = time.time() - matching_start
                     self.avg_times['matching'] = matching_time / 100
-
+                    
                     # Update UI with matching summary
                     if hasattr(self.app, 'matching_stats'):
                         self._update_matching_summary(self.app.matching_stats)
-
+                        
                 except Exception as e:
                     logger.error(f"Error in matching process: {e}")
                     raise RuntimeError(f"Failed during matching process: {str(e)}")
@@ -1090,6 +1153,41 @@ class ApplicationGUI(tk.Tk):
             ))
 
     # NOTE - show error box
+    # Create a new error collection utility method in ApplicationGUI
+    def _collect_and_display_errors(self, error_dict, title_key="errors_found"):
+        """Collect and display errors in a formatted way"""
+        if not error_dict:
+            return False
+            
+        error_message = TranslationManager.get_translation(self.language.get(), title_key) + "\n\n"
+        
+        for file_type, error_info in error_dict.items():
+            file_type_translation = TranslationManager.get_translation(self.language.get(), file_type + "_name")
+            error_message += f"{file_type_translation}:\n"
+            
+            if isinstance(error_info, list):
+                # List of missing columns
+                for item in error_info:
+                    error_message += f"- {item}\n"
+            elif isinstance(error_info, dict):
+                # Column count mismatch
+                error_message += TranslationManager.get_translation(
+                    self.language.get(), 
+                    "column_count_mismatch", 
+                    error_info.get('actual', 0), 
+                    error_info.get('expected', 0)
+                ) + "\n"
+            else:
+                # Generic error message
+                error_message += f"- {error_info}\n"
+        
+        messagebox.showerror(
+            TranslationManager.get_translation(self.language.get(), "error"), 
+            error_message
+        )
+        self._update_status(error_message)
+        return True
+
     def _show_error(self, message):
         """Show error message with appropriate detail level"""
         lang = self.language.get()
