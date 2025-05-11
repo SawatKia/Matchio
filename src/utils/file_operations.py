@@ -187,7 +187,7 @@ class FileManager:
             if fallback_to_express_format:
                 try:
                     logger.info(f"Attempting to load as Express format due to encoding error")
-                    df = FileManager.load_express_format_csv(file_path)
+                    df = FileManager._load_express_format_csv(file_path)
                     return df
                 except Exception as fallback_e:
                     logger.error(f"Express format fallback failed after encoding error: {str(fallback_e)}")
@@ -201,7 +201,7 @@ class FileManager:
             if fallback_to_express_format:
                 try:
                     logger.info(f"Attempting to load as Express format due to parser error")
-                    df = FileManager.load_express_format_csv(file_path)
+                    df = FileManager._load_express_format_csv(file_path)
                     return df
                 except Exception as fallback_e:
                     logger.error(f"Express format fallback failed after parser error: {str(fallback_e)}")
@@ -212,7 +212,7 @@ class FileManager:
             if fallback_to_express_format:
                 try:
                     logger.info(f"Attempting to load as Express format")
-                    df = FileManager.load_express_format_csv(file_path)
+                    df = FileManager._load_express_format_csv(file_path)
                     return df
                 except Exception as fallback_e:
                     logger.error(f"Express format fallback also failed: {str(fallback_e)}")
@@ -220,7 +220,7 @@ class FileManager:
             return None
             
     @staticmethod
-    def load_express_format_csv(file_path: str, encoding: str = "cp874") -> pd.DataFrame:
+    def _load_express_format_csv(file_path: str, encoding: str = "cp874") -> pd.DataFrame:
         """
         Load and process Express program formatted CSV report
         
@@ -240,7 +240,7 @@ class FileManager:
             logger.info(f"Loading Express format CSV from {file_path}")
             
             # Read raw file content
-            raw_lines = FileManager.load_raw_csv(file_path, encoding)
+            raw_lines = FileManager._load_raw_csv(file_path, encoding)
             
             # Filter lines that start with a number sequence (may have spaces before)
             filtered_lines = [line for line in raw_lines if match(r'^\s*"\s+\d+",', line)]
@@ -284,7 +284,7 @@ class FileManager:
             raise
 
     @staticmethod
-    def load_raw_csv(file_path:str, encoding:str = "utf-8") -> List[str]:
+    def _load_raw_csv(file_path:str, encoding:str = "utf-8") -> List[str]:
         """
         Load raw CSV file and return lines
         
