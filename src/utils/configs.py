@@ -1,3 +1,4 @@
+# src\utils\configs.py
 import os 
 
 CONFIG = {

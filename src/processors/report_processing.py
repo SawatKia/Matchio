@@ -1,12 +1,11 @@
 # src\processors\report_processing.py
 import pandas as pd
-import os
-import io
+from io import StringIO
 import json
-from typing import Optional, Dict, Any, TypedDict, List
+from typing import Optional, TypedDict, List
 from tabulate import tabulate
 
-from utils import get_logger, FileManager, DataFrameCleaner
+from utils import get_logger, FileManager, DataFrameCleaner, CONFIG
 
 # Get the pre-configured logger
 logger = get_logger()
@@ -104,9 +103,31 @@ class ReportProcess:
             logger.error(f"Error validating file path: {e}")
             raise
 
+    def _verify_required_columns(self, df: pd.DataFrame, expected_columns: List[str]) -> pd.DataFrame:
+        try:
+            logger.info("Verifying required columns")
+            required_columns = []
+            additional_columns = ["matched", "total_amount", "withholding_tax", "net_amount", "days_outstanding", "paid_amount", "days_since_payment"]
+            for col in expected_columns:
+                if col in additional_columns:
+                    continue
+                required_columns.append(col)
+            if required_columns == ['paid_date', 'company_name', 'tax_id', 'amount']:
+                required_columns.append("withholding_tax")
+            logger.debug(f"required columns: {required_columns}")
+            if len(df.columns) == len(required_columns):
+                df.columns = required_columns
+            else:
+                logger.error(f"Number of columns in DataFrame does not match expected columns: {len(df.columns)} != {len(required_columns)}")
+                raise ValueError(f"Number of columns in DataFrame does not match expected columns: {len(df.columns)} != {len(required_columns)}")
+            return df
+
+        except Exception as e:
+            logger.error(f"Error verifying required columns: {e}")
+            raise
     def _validate_columns(self, df: pd.DataFrame, expected_columns: List[str]) -> pd.DataFrame:
         """
-        Validate that DataFrame has expected columns, rename if needed
+        Validate that DataFrame has expected columns, set the columns if needed
         
         Args:
             df: DataFrame to validate
@@ -116,6 +137,7 @@ class ReportProcess:
             DataFrame with validated columns
         """
         try:
+            df = self._verify_required_columns(df, expected_columns)
             logger.info("Validating DataFrame columns")
             
             if not expected_columns:
@@ -124,21 +146,36 @@ class ReportProcess:
             logger.debug(f"\033[1;31m<\033[0m Expected columns: {expected_columns}::{type(expected_columns)}")
 
             added_columns = []
+            unknown_columns = []
             # Check if actual columns are fewer than expected columns
             logger.debug(f"verifying condition if {len(df.columns)} < {len(expected_columns)}")
             if len(df.columns) < len(expected_columns):
                 logger.warning("Actual columns are fewer than expected columns. Adding missing columns with default placeholders.")
                 
                 for col in expected_columns[len(df.columns):]:
+                    logger.debug(f"Adding column: {col}")
                     if col == "matched":
                         df[col] = 'false'
-                    elif col == "days_outstanding" or col == "days_since_payment":
-                        df[col] = 0
+                    elif col =="total_amount" or col == "withholding_tax" or col == "net_amount" or col == "days_outstanding" or col == "paid_amount" or col == "days_since_payment":
+                        df[col] = 0 
                     else:
-                        df[col] = 1111
+                        unknown_columns.append(col)
+                        logger.debug(f"added {col} to unknown columns list, unhandle placeholder")
+                    
                     logger.warning(f"Added {df[col].unique()} value to column: '{col}' ")
                     added_columns.append(col)
+
+                if len(unknown_columns) > 0:
+                    logger.error(f"unknown columns: {', '.join(unknown_columns)} ")
+                    raise ValueError(f"unknown columns: {', '.join(unknown_columns)} in report {self.report_name}")
+                
+            elif len(df.columns) == len(expected_columns):
+                logger.debug("Actual column count met the expected columns")
+            else:
+                logger.warning("Actual column count not met the expected columns")
+                raise ValueError("Actual column count not met the expected columns")
             columns_match = pd.Index(df.columns).equals(pd.Index(expected_columns))
+            logger.debug(f"current columns: {df.columns}")
             logger.debug(f"All columns match?: {columns_match}")
             if not columns_match:
                 logger.warning("DataFrame columns do not match expected columns. Resetting the columns.")
@@ -155,7 +192,7 @@ class ReportProcess:
     @staticmethod
     def _log_dataframe_sample(df: pd.DataFrame, rows: int = 5):
         try:
-            buffer = io.StringIO()
+            buffer = StringIO()
             df.info(buf=buffer)
             info_str = buffer.getvalue()
             logger.debug(f"Dataframe info:\n{info_str}")
@@ -369,8 +406,9 @@ class ReportProcess:
             
             # Set default sheet name if not provided
             if sheet_name is None:
-                sheet_name = r"หัก ณ ที่จ่าย"  # r for non-ascii text
-                logger.warning(f"Sheet name not provided, default to: {sheet_name}")
+                config_sheet = CONFIG.get('excel_Withholding_tax_report_sheet')
+                sheet_name = config_sheet if config_sheet else r"หัก ณ ที่จ่าย"
+                logger.info(f"Using sheet name from CONFIG: {sheet_name}")
             
             # Check if file exists
             if not FileManager.ensure_file_exists(excel_filepath):
@@ -384,7 +422,7 @@ class ReportProcess:
             ReportProcess._log_dataframe_sample(df, 10)
             
             # Validate columns
-            expected_columns = self.EXPECTED_COLUMNS.get('excel_Withholding_tax_report', {})
+            expected_columns = self.EXPECTED_COLUMNS.get('withholding_tax_report', {})
             logger.debug(f"Expected columns: {expected_columns}")
 
             # 2. cleaning by handle na, null, another invalid values properly
@@ -432,8 +470,9 @@ class ReportProcess:
             
             # Set default sheet name if not provided
             if sheet_name is None:
-                sheet_name = r"Sheet1"  # Excel default sheet name
-                logger.warning(f"Sheet name not provided, default to: {sheet_name}")
+                config_sheet = CONFIG.get('excel_statement_sheet')
+                sheet_name = config_sheet if config_sheet else r"Sheet1"
+                logger.info(f"Using sheet name from CONFIG: {sheet_name}")
             
             # Check if file exists
             if not FileManager.ensure_file_exists(excel_filepath):

@@ -1,9 +1,8 @@
 # src\utils\data_cleaner.py
 import pandas as pd
 import numpy as np
-import math
-import re
 import json
+from re import search
 from typing import Tuple, List
 from utils import get_logger
 
@@ -106,7 +105,7 @@ class DataFrameCleaner:
         # Thai unicode range: \u0E00-\u0E7F
         # English letters and numbers
         pattern = r'[\u0E00-\u0E7F\w\d]+'
-        return bool(re.search(pattern, str(text)))
+        return bool(search(pattern, str(text)))
 
     @staticmethod
     def remove_invalid_content_columns(df: pd.DataFrame) -> pd.DataFrame:
