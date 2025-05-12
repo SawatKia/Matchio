@@ -100,11 +100,13 @@ class Application:
             logger.error(err_msg)
             if error_callback:
                 error_callback(err_msg)
+            raise
         except Exception as e:
             err_msg = f"Error processing purchase tax report: {e}"
             logger.error(err_msg, exc_info=True) 
             if error_callback:
                 error_callback(err_msg)
+            raise
         finally:
             logger.info("=" * 100)
 
@@ -137,11 +139,13 @@ class Application:
             logger.error(err_msg)
             if error_callback:
                 error_callback(err_msg)
+            raise
         except Exception as e:
             err_msg = f"Error processing sale tax report: {e}"
             logger.error(err_msg, exc_info=True)
             if error_callback:
                 error_callback(err_msg)
+            raise
         finally:
             if progress_callback:
                 progress_callback("sale", 2, 4)
@@ -167,11 +171,13 @@ class Application:
             logger.error(err_msg)
             if error_callback:
                 error_callback(err_msg)
+            raise
         except Exception as e:
             err_msg = f"Error processing withholding tax report: {e}"
             logger.error(err_msg, exc_info=True)
             if error_callback:
                 error_callback(err_msg)
+            raise
         finally:
             if progress_callback:
                 progress_callback("withholding", 3, 4)
@@ -203,11 +209,13 @@ class Application:
             logger.error(err_msg)
             if error_callback:
                 error_callback(err_msg)
+            raise
         except Exception as e:
             err_msg = f"Error processing statement: {e}"
             logger.error(err_msg, exc_info=True)
             if error_callback:
                 error_callback(err_msg)
+            raise
         finally:
             logger.info("=" * 100)
 
