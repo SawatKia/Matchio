@@ -398,7 +398,6 @@ class ApplicationGUI(tk.Tk):
         sheet_label.pack(side=tk.LEFT, padx=2)
         
         # Create combobox for sheet selection
-        # FIXME - send the selected sheet name to CONFIG
         sheet_var = tk.StringVar()
         sheet_combo = ttk.Combobox(sheet_frame, textvariable=sheet_var, width=15, state="readonly")
         sheet_combo.pack(side=tk.LEFT, padx=2)
@@ -409,6 +408,10 @@ class ApplicationGUI(tk.Tk):
             'var': sheet_var,
             'combo': sheet_combo
         }
+
+        # Update CONFIG when sheet selection changes
+        sheet_var.trace_add("write", lambda *args, k=config_key, sv=sheet_var: 
+                            CONFIG.update({f"{k}_sheet": sv.get()}))
         
         # Update sheet list when file path changes
         getattr(self, f"{config_key}_var").trace_add("write", 
@@ -937,7 +940,6 @@ class ApplicationGUI(tk.Tk):
         self._update_elapsed_time()
         
         # Run processing in a separate thread
-        # FIXME - if any process errors, the program should stop working
         def process_thread():
             try:
                 # Update CONFIG from GUI before processing
@@ -954,20 +956,7 @@ class ApplicationGUI(tk.Tk):
                 except Exception as e:
                     logger.error(f"Error initializing services: {e}")
                     raise RuntimeError(f"Failed to initialize services: {str(e)}")
-                
-                # try:
-                #     #  validate number of column before process the report files to verify that the number of existing columns(that not null) are equal to the number of that expected columns
-                #     self._update_status(TranslationManager.get_translation(self.language.get(), "validating_column_counts"))
-                #     logger.info("Validating column counts")
-                #     column_count_errors = self.app.validate_column_counts()
-                #     if column_count_errors:
-                #         if self._collect_and_display_errors(column_count_errors, "column_count_errors"):
-                #             return
-                # except Exception as e:
-                #     logger.error(f"Error during column count validation: {e}")
-                #     self._show_error(str(e))
-                #     return
-                
+                                
                 # Process reports (cleaning step)
                 cleaning_start = time.time()
                 self.after(0, lambda: self._update_status(
@@ -995,6 +984,7 @@ class ApplicationGUI(tk.Tk):
                         matching_errors.append(error_msg)
 
                     # collect the error messages and show it to the user
+                    logger.info("Processing report files...")
                     self.app.process_report_files(
                         progress_callback=file_processing_callback,
                         error_callback=error_collecting_callback)
@@ -1008,8 +998,10 @@ class ApplicationGUI(tk.Tk):
                     # Validate required columns
                     self._update_status(TranslationManager.get_translation(self.language.get(), "validating_columns"))
                     
+                    logger.info("Validating required columns...")
                     validation_errors = self.app.validate_required_columns()
                     if validation_errors:
+                        logger.error("Column validation failed")
                         self.after(0, lambda: self._collect_and_display_errors(validation_errors, "column_validation_error"))
                         raise RuntimeError(TranslationManager.get_translation(self.language.get(), "column_validation_failed"))
                 except Exception as e:
@@ -1019,6 +1011,7 @@ class ApplicationGUI(tk.Tk):
                 # Safely get statement length
                 try:
                     statement_length = 500  # Default fallback
+                    logger.info("Getting statement length...")
                     if self.app and self.app.report_processor:
                         if hasattr(self.app.report_processor, 'statement_length'):
                             statement_length = self.app.report_processor.statement_length or 500
@@ -1117,13 +1110,12 @@ class ApplicationGUI(tk.Tk):
                     complete_msg
                 ))
                 
+                # Update GUI on completion
+                self.after(0, self._process_complete)
             except Exception as e:
                 logger.error(f"Error in processing: {e}")
                 self.after(0, lambda e=e: self._show_error(str(e)))
                 
-            finally:
-                # Update GUI on completion
-                self.after(0, self._process_complete)
         
         # Start the thread
         self.processing_thread = threading.Thread(target=process_thread, daemon=True)
