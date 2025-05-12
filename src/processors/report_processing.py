@@ -125,6 +125,7 @@ class ReportProcess:
         except Exception as e:
             logger.error(f"Error verifying required columns: {e}")
             raise
+    
     def _validate_columns(self, df: pd.DataFrame, expected_columns: List[str]) -> pd.DataFrame:
         """
         Validate that DataFrame has expected columns, set the columns if needed
