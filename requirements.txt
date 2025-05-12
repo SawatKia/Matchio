@@ -6,12 +6,12 @@ pillow==11.1.0
 psutil==7.0.0
 
 # OCR and PDF processing
-easyocr==1.7.2
-PyMuPDF==1.25.5
-pdf2image==1.17.0
-torch==2.7.0
-torchaudio==2.7.0
-torchvision==0.21.0
+# easyocr==1.7.2
+# PyMuPDF==1.25.5
+# pdf2image==1.17.0
+# torch==2.7.0
+# torchaudio==2.7.0
+# torchvision==0.21.0
 
 # Google Cloud dependencies
 google-cloud-documentai==3.3.0
