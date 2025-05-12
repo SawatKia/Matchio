@@ -36,7 +36,8 @@ EXPECTED_COLUMN_MAPPINGS = {
         'company_tax_id': 'เลขประจำตัวผู้เสียภาษี',
         'product_value': 'มูลค่าสินค้า',
         'vat': 'ภาษีมูลค่าเพิ่ม',
-        'total_amount': 'จำนวนเงิน'
+        'total_amount': 'จำนวนเงิน',
+        'matched': 'จับคู่แล้ว', # Matched status mapping
     },
     'sale_tax_report': {
         'order_number': 'ลำดับ',
